@@ -184,7 +184,7 @@ cgaputc(int c)
   {//refresh current display in case a char was inserted in the middle of the line
     for(i = input.endInput - input.e; i >= 0; i--)
     {
-	tempChar = input.buf[input.e + i];//get the current char
+	tempChar = input.buf[(input.e % INPUT_BUF) + i];//get the current char
 	crt[pos + i] =  tempChar | 0x0700;//print the char to the screen
     }
   }
@@ -240,8 +240,17 @@ consoleintr(int (*getc)(void))
       break;
     case C('H'): case '\x7f':  // Backspace
       if(input.e != input.w){
-        input.e--;
-        consputc(BACKSPACE);
+	if (input.e != input.endInput)
+	{
+	  for(i = input.e; i != input.endInput; i++)
+	  {
+	    input.buf[(i - 1) % INPUT_BUF] = input.buf[i % INPUT_BUF];
+	  }
+	  input.buf[(input.endInput - 1) % INPUT_BUF] = ' ';
+	  input.endInput--;
+	}
+	input.e--;
+	consputc(BACKSPACE);
       }
       break;
     default:
