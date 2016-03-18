@@ -23,6 +23,18 @@ static struct {
   int locking;
 } cons;
 
+//shifted up the input struct for wider scope
+#define LEFT_ARROW 228
+#define RIGHT_ARROW 229
+#define INPUT_BUF 128
+struct {
+  char buf[INPUT_BUF];
+  uint r;  // Read index
+  uint w;  // Write index
+  uint e;  // Edit index
+  uint endInput; //user input length
+} input;
+
 static void
 printint(int xx, int base, int sign)
 {
@@ -129,7 +141,7 @@ static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 static void
 cgaputc(int c)
 {
-  int pos;
+  int pos, i, tempChar;
   
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
@@ -141,7 +153,16 @@ cgaputc(int c)
     pos += 80 - pos%80;
   else if(c == BACKSPACE){
     if(pos > 0) --pos;
-  } else
+  } 
+  else if (c == LEFT_ARROW && pos > 0)
+  {//move curser to the left
+    pos--;
+  }
+  else if (c == RIGHT_ARROW)
+  {//move curser to the left
+    pos++;
+  }
+  else
     crt[pos++] = (c&0xff) | 0x0700;  // black on white
 
   if(pos < 0 || pos > 25*80)
@@ -157,7 +178,16 @@ cgaputc(int c)
   outb(CRTPORT+1, pos>>8);
   outb(CRTPORT, 15);
   outb(CRTPORT+1, pos);
-  crt[pos] = ' ' | 0x0700;
+  if (c == BACKSPACE)
+    crt[pos] = ' ' | 0x0700;
+  if (input.e != input.endInput)
+  {//refresh current display in case a char was inserted in the middle of the line
+    for(i = input.endInput - input.e; i >= 0; i--)
+    {
+	tempChar = input.buf[input.e + i];//get the current char
+	crt[pos + i] =  tempChar | 0x0700;//print the char to the screen
+    }
+  }
 }
 
 void
@@ -176,20 +206,12 @@ consputc(int c)
   cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-  char buf[INPUT_BUF];
-  uint r;  // Read index
-  uint w;  // Write index
-  uint e;  // Edit index
-} input;
-
 #define C(x)  ((x)-'@')  // Control-x
 
 void
 consoleintr(int (*getc)(void))
 {
-  int c, doprocdump = 0;
+  int i, c, isCurserPointsEndOfLine, doprocdump = 0;
 
   acquire(&cons.lock);
   while((c = getc()) >= 0){
@@ -198,9 +220,21 @@ consoleintr(int (*getc)(void))
       doprocdump = 1;   // procdump() locks cons.lock indirectly; invoke later
       break;
     case C('U'):  // Kill line.
+      isCurserPointsEndOfLine = (input.e != input.endInput);
+      while (input.e != input.endInput)
+      {//move the curser to the end of the line
+		consputc(RIGHT_ARROW);
+		input.e++;
+      }
+      if (isCurserPointsEndOfLine)
+      {//move the curser to the right once more
+		consputc(RIGHT_ARROW);
+		consputc(BACKSPACE);
+      }
       while(input.e != input.w &&
             input.buf[(input.e-1) % INPUT_BUF] != '\n'){
         input.e--;
+		input.endInput--;//update endInput 
         consputc(BACKSPACE);
       }
       break;
@@ -211,12 +245,51 @@ consoleintr(int (*getc)(void))
       }
       break;
     default:
-      if(c != 0 && input.e-input.r < INPUT_BUF){
+      if(c != 0 && input.endInput-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
-        input.buf[input.e++ % INPUT_BUF] = c;
-        consputc(c);
-        if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
-          input.w = input.e;
+	if (c == LEFT_ARROW)
+	{
+	  if (input.e != input.w)
+	  {//make sure this is not the beginning of the line before shifting cursur left
+	    input.e--;
+	    consputc(c);
+	  }
+	}
+	else if (c == RIGHT_ARROW)
+	{
+	  if (input.e != input.endInput)
+	  {//make sure this is not the end of the line before shifting cursur right
+	    input.e++;
+	    consputc(c);
+	  }
+	}
+	else if (c == '\n')
+	{
+	  input.e = input.endInput;//move the curser to the end of the line 
+	  			//so the command will be fully read by the system
+	  input.buf[input.e++ % INPUT_BUF] = c;
+	  input.endInput++;//update endInput index
+	  consputc(c);
+	  
+	}
+	else
+	{
+	  for (i = input.endInput; i != input.e; i--)
+	  {//if the inserted char is inserted in the middle of the line, 
+	  //this loop will shift right the input on the right side of the cursur
+	    input.buf[i % INPUT_BUF] = input.buf[(i - 1) % INPUT_BUF];
+	  }
+	  input.buf[input.e++ % INPUT_BUF] = c;
+	  input.endInput++;
+	  consputc(c);
+	}
+        if(c == '\n' || c == C('D') || input.endInput == input.r+INPUT_BUF){
+	  while (input.e != input.endInput)
+	  {
+	    consputc(RIGHT_ARROW);
+	    input.e++;
+	  }
+	  input.w = input.e;
           wakeup(&input.r);
         }
       }
