@@ -246,9 +246,9 @@ consoleintr(int (*getc)(void))
 	  {
 	    input.buf[(i - 1) % INPUT_BUF] = input.buf[i % INPUT_BUF];
 	  }
-	  input.buf[(input.endInput - 1) % INPUT_BUF] = ' ';
-	  input.endInput--;
 	}
+	input.buf[(input.endInput - 1) % INPUT_BUF] = ' ';
+	input.endInput--;
 	input.e--;
 	consputc(BACKSPACE);
       }
