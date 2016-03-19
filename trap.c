@@ -36,6 +36,7 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+  
   if(tf->trapno == T_SYSCALL){
     if(proc->killed)
       exit();
@@ -51,6 +52,7 @@ trap(struct trapframe *tf)
     if(cpu->id == 0){
       acquire(&tickslock);
       ticks++;
+      increaseTimeCounters();
       wakeup(&ticks);
       release(&tickslock);
     }

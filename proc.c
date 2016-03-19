@@ -99,6 +99,7 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  p->ctime = ticks; //update creation time
   p->state = RUNNABLE;
 }
 
@@ -160,6 +161,7 @@ fork(void)
 
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
+  np->ctime = ticks; //update creation time
   np->state = RUNNABLE;
   release(&ptable.lock);
   
@@ -463,4 +465,28 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+void
+increaseTimeCounters()
+{
+  struct proc *p;
+
+  acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    switch (p->state)
+    {
+      case SLEEPING:
+	p->stime++;
+	break;
+      case RUNNABLE:
+	p->retime++;
+	break;
+      case RUNNING:
+	p->rutime++;
+	break;
+      default:
+	break;
+    }
+  release(&ptable.lock);
 }
