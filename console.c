@@ -24,9 +24,13 @@ static struct {
 } cons;
 
 //shifted up the input struct for wider scope
+#define UP_ARROW 226
+#define DOWN_ARROW 227
 #define LEFT_ARROW 228
 #define RIGHT_ARROW 229
 #define INPUT_BUF 128
+#define MAX_HISTORY 16
+
 struct {
   char buf[INPUT_BUF];
   uint r;  // Read index
@@ -34,6 +38,13 @@ struct {
   uint e;  // Edit index
   uint endInput; //user input length
 } input;
+
+struct 
+{
+  char buf[MAX_HISTORY][INPUT_BUF];
+  uint total;
+} history;
+
 
 static void
 printint(int xx, int base, int sign)
@@ -86,23 +97,23 @@ cprintf(char *fmt, ...)
     if(c == 0)
       break;
     switch(c){
-    case 'd':
+      case 'd':
       printint(*argp++, 10, 1);
       break;
-    case 'x':
-    case 'p':
+      case 'x':
+      case 'p':
       printint(*argp++, 16, 0);
       break;
-    case 's':
+      case 's':
       if((s = (char*)*argp++) == 0)
         s = "(null)";
       for(; *s; s++)
         consputc(*s);
       break;
-    case '%':
+      case '%':
       consputc('%');
       break;
-    default:
+      default:
       // Print unknown % sequence to draw attention.
       consputc('%');
       consputc(c);
@@ -202,7 +213,7 @@ consputc(int c)
   if(c == BACKSPACE){
     uartputc('\b'); uartputc(' '); uartputc('\b');
   } else
-    uartputc(c);
+  uartputc(c);
   cgaputc(c);
 }
 
@@ -253,9 +264,12 @@ consoleintr(int (*getc)(void))
 	consputc(BACKSPACE);
       }
       break;
+   
     default:
+
       if(c != 0 && input.endInput-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
+
 	if (c == LEFT_ARROW)
 	{
 	  if (input.e != input.w)
@@ -272,6 +286,12 @@ consoleintr(int (*getc)(void))
 	    consputc(c);
 	  }
 	}
+   else if (c==UP_ARROW){
+    input.e++;
+  }
+  else if (c==DOWN_ARROW){
+    input.e--;
+  }
 	else if (c == '\n')
 	{
 	  input.e = input.endInput;//move the curser to the end of the line 
@@ -279,7 +299,6 @@ consoleintr(int (*getc)(void))
 	  input.buf[input.e++ % INPUT_BUF] = c;
 	  input.endInput++;//update endInput index
 	  consputc(c);
-	  
 	}
 	else
 	{
@@ -298,6 +317,8 @@ consoleintr(int (*getc)(void))
 	    consputc(RIGHT_ARROW);
 	    input.e++;
 	  }
+    //copy the command to the history
+     strncpy(history.buf[history.total++],input.buf+input.w,input.endInput-input.r-1);
 	  input.w = input.e;
           wakeup(&input.r);
         }
