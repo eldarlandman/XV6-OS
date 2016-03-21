@@ -119,6 +119,8 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+int wait2(int *retime, int *rutime, int *stime);
+
 
 
 // swtch.S
