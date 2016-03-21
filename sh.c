@@ -13,6 +13,8 @@
 
 #define MAXARGS 10
 
+#define MAX_HISTORY 16
+
 struct cmd {
   int type;
 };
@@ -145,7 +147,8 @@ int
 main(void)
 {
   static char buf[100];
-  int fd;
+  char historyBuf[128];
+  int i, fd;
   
   // Assumes three file descriptors open.
   while((fd = open("console", O_RDWR)) >= 0){
@@ -165,9 +168,25 @@ main(void)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
+    if (buf[0] == 'h' &&
+	buf[1] == 'i' &&
+	buf[2] == 's' &&
+	buf[3] == 't' &&
+	buf[4] == 'o' &&
+	buf[5] == 'r' &&
+	buf[6] == 'y')
+    {
+      for (i = MAX_HISTORY; i >=0; i--)
+	if (history((char*)historyBuf, i) == 0)
+	{
+	  printf(2, "%s\n", historyBuf);
+	}
+	continue;
+    }
     if(fork1() == 0)
-      runcmd(parsecmd(buf));
+      runcmd(parsecmd(buf));    
     wait();
+    
   }
   exit();
 }

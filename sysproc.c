@@ -89,3 +89,19 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int sys_history(void){
+  int id;
+  char * buffer;
+  
+  if (argint(1, &id) < 0 ||
+      argstr(0, &buffer) < 0)
+      return -1;
+  
+  if (id > 15 || id < 0)
+    return -2;
+  
+  return history(buffer, id);
+  
+}
+  

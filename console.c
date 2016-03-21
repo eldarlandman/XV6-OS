@@ -31,6 +31,8 @@ static struct {
 #define INPUT_BUF 128
 #define MAX_HISTORY 16
 
+#define NULL 0
+
 struct {
   char buf[INPUT_BUF];
   uint r;  // Read index
@@ -43,7 +45,8 @@ struct
 {
   char buf[MAX_HISTORY][INPUT_BUF];
   uint total;
-} history;
+  uint curr;
+} history_l;
 
 
 static void
@@ -286,12 +289,71 @@ consoleintr(int (*getc)(void))
 	    consputc(c);
 	  }
 	}
-   else if (c==UP_ARROW){
-    input.e++;
-  }
-  else if (c==DOWN_ARROW){
-    input.e--;
-  }
+	else if (c==UP_ARROW){
+	  	  
+	  int j;	  
+	  
+	  if (history_l.curr == 0)
+	    history_l.curr = history_l.total;
+	  else
+	    history_l.curr--;
+
+	    
+	  while (input.e < input.endInput)
+	  {
+	    input.e++;
+	    consputc(RIGHT_ARROW);
+	  }
+	  
+	  //clean  command line and init buffer
+	  for (j=input.w;  j!=input.endInput; j++){	  	    
+	      consputc(BACKSPACE);
+	    }
+	  input.e=input.w;   input.endInput=input.w;
+	   
+	  //copy the current history command to command line   
+	  char* curr_command=history_l.buf[history_l.curr];  
+	  
+	  for (j=0; j < INPUT_BUF && curr_command[j]!=NULL; j++){    
+	    input.buf[input.w+j]=curr_command[j];
+	    consputc(curr_command[j]);
+	  }
+	  input.e=input.w+j;
+	  input.endInput = input.e;
+	  
+	}
+	else if (c==DOWN_ARROW){
+	  
+	  int j;	  
+	  
+	  if (history_l.curr == history_l.total)
+	    history_l.curr = 0;
+	  else
+	    history_l.curr++;
+	  
+	  while (input.e < input.endInput)
+	  {
+	    input.e++;
+	    consputc(RIGHT_ARROW);
+	  }
+	    
+	  //clean  command line and init buffer
+	  for (j=input.w;  j!=input.endInput; j++){	  	    
+	      consputc(BACKSPACE);
+	    }
+	  input.e=input.w;   input.endInput=input.w;
+	   
+	  //copy the current history command to command line   
+	  char* curr_command=history_l.buf[history_l.curr];  
+	  
+	  for (j=0; j < INPUT_BUF && curr_command[j]!=NULL; j++){    
+	    input.buf[input.w+j]=curr_command[j];
+	    consputc(curr_command[j]);
+	  }
+	  input.e=input.w+j;
+	  input.endInput = input.e;
+	  
+	}
 	else if (c == '\n')
 	{
 	  input.e = input.endInput;//move the curser to the end of the line 
@@ -317,8 +379,13 @@ consoleintr(int (*getc)(void))
 	    consputc(RIGHT_ARROW);
 	    input.e++;
 	  }
-    //copy the command to the history
-     strncpy(history.buf[history.total++],input.buf+input.w,input.endInput-input.r-1);
+	  //copy the command to the history
+	  strncpy(history_l.buf[history_l.total],input.buf+input.w , input.endInput-input.r-1); //put the new command to next history cell
+	  history_l.buf[history_l.total-1][input.endInput-input.r]=0;
+	  	  
+	  history_l.total++;
+	  history_l.curr=history_l.total;
+     
 	  input.w = input.e;
           wakeup(&input.r);
         }
@@ -396,5 +463,33 @@ consoleinit(void)
 
   picenable(IRQ_KBD);
   ioapicenable(IRQ_KBD, 0);
+}
+
+int history(char* buf, int id){
+  
+  int i;
+  char * copiedHistory;
+
+  acquire(&cons.lock);
+  
+  if (id > history_l.total)
+  {
+      release(&cons.lock);
+      return -1;
+  }
+  
+  copiedHistory = history_l.buf[id];
+  for(i = 0; i < INPUT_BUF && copiedHistory[i] != 0; i++)
+  {
+    buf[i] = copiedHistory[i];
+    buf[i + 1] = 0;
+    input.buf[(i + input.w) % INPUT_BUF] = copiedHistory[i];
+    input.e++;
+    input.endInput++;
+  }
+  
+  release(&cons.lock);
+  return 0;
+  
 }
 
