@@ -474,7 +474,7 @@ increaseTimeCounters()
 
   acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    switch (p->state)
+      switch (p->state)
     {
       case SLEEPING:
 	p->stime++;
@@ -515,6 +515,9 @@ int wait2(int *retime, int *rutime, int *stime)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
+	*retime = p->retime;
+	*rutime = p->rutime;
+	*stime = p->stime;
         release(&ptable.lock);
         return pid;
       }
