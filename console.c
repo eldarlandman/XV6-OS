@@ -306,7 +306,8 @@ consoleintr(int (*getc)(void))
 	  }
 	  
 	  //clean  command line and init buffer
-	  for (j=input.w;  j!=input.endInput; j++){	  	    
+	  for (j=input.w;  j!=input.endInput; j++){
+	      input.buf[j] = ' ';
 	      consputc(BACKSPACE);
 	    }
 	  input.e=input.w;   input.endInput=input.w;
@@ -338,7 +339,8 @@ consoleintr(int (*getc)(void))
 	  }
 	    
 	  //clean  command line and init buffer
-	  for (j=input.w;  j!=input.endInput; j++){	  	    
+	  for (j=input.w;  j!=input.endInput; j++){	  
+	      input.buf[j] = ' ';
 	      consputc(BACKSPACE);
 	    }
 	  input.e=input.w;   input.endInput=input.w;
@@ -381,7 +383,7 @@ consoleintr(int (*getc)(void))
 	  }
 	  //copy the command to the history
 	  strncpy(history_l.buf[history_l.total],input.buf+input.w , input.endInput-input.r-1); //put the new command to next history cell
-	  history_l.buf[history_l.total-1][input.endInput-input.r]=0;
+	  history_l.buf[history_l.total][input.endInput-input.r]=0;
 	  	  
 	  history_l.total++;
 	  history_l.curr=history_l.total;
@@ -483,9 +485,6 @@ int history(char* buf, int id){
   {
     buf[i] = copiedHistory[i];
     buf[i + 1] = 0;
-    input.buf[(i + input.w) % INPUT_BUF] = copiedHistory[i];
-    input.e++;
-    input.endInput++;
   }
   
   release(&cons.lock);

@@ -119,6 +119,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+int              yield_sys_call(void);
 int wait2(int *retime, int *rutime, int *stime);
 #ifdef SML
 int set_prio(int priority);

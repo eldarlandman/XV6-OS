@@ -25,9 +25,12 @@ int sleep(int);
 int uptime(void);
 int history(char*, int);
 int wait2(int *, int *, int *);
+int yield(void);
+
 #ifdef SML
 int set_prio(int priority);
 #endif
+
 
 // ulib.c
 int stat(char*, struct stat*);

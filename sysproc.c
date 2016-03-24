@@ -120,6 +120,12 @@ int sys_wait2(void)
   
   return wait2(retime, rutime, stime);
 }
+
+int sys_yield(void)
+{
+  return yield_sys_call();
+}
+
 #ifdef SML
 int sys_set_prio(void)
 {

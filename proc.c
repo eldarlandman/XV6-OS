@@ -280,7 +280,7 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
-void
+  void
 scheduler(void)
 {
 
@@ -472,6 +472,12 @@ yield(void)
   proc->state = RUNNABLE;
   sched();
   release(&ptable.lock);
+}
+
+int yield_sys_call(void)
+{
+  yield();
+  return 0;
 }
 
 // A fork child's very first scheduling by scheduler()
