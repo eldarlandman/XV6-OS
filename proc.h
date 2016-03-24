@@ -1,6 +1,11 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 
+#define HIGH_P 3
+#define MED_P 2
+#define LOW_P 1
+
+
 // Per-CPU state
 struct cpu {
   uchar id;                    // Local APIC ID; index into cpus[] below
@@ -10,10 +15,13 @@ struct cpu {
   volatile uint started;       // Has the CPU started?
   int ncli;                    // Depth of pushcli nesting.
   int intena;                  // Were interrupts enabled before pushcli?
-  
+    
   // Cpu-local storage variables; see below
   struct cpu *cpu;
   struct proc *proc;           // The currently-running process.
+  
+  //gal-eldar change - a counter that counts  the current proc's time ticks
+  int quanta_counter;
 };
 
 extern struct cpu cpus[NCPU];
@@ -72,6 +80,8 @@ struct proc {
   uint stime; //sleeping time
   uint retime; // ready time
   uint rutime; //running time
+  
+  uint priority;
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -81,3 +91,6 @@ struct proc {
 //   expandable heap
 void increaseTimeCounters();
 int wait2(int *retime, int *rutime, int *stime);
+#ifdef SML
+int set_prio(int priority);
+#endif

@@ -100,6 +100,9 @@ extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_wait2(void);
+#ifdef SML
+extern int sys_set_prio(void);
+#endif
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -125,6 +128,9 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_history] sys_history,
 [SYS_wait2] sys_wait2,
+#ifdef SML
+[SYS_set_prio] sys_set_prio,
+#endif
 };
 
 

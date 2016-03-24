@@ -7,6 +7,7 @@
 #include "proc.h"
 #include "spinlock.h"
 
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -20,6 +21,19 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+struct proc * 
+scanPar(uint pario){
+
+  struct proc * p;
+      
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	if(p->state == RUNNABLE && p->priority==pario){
+	  return p;
+	}          
+      }
+      return 0;
+    }
+    
 void
 pinit(void)
 {
@@ -100,6 +114,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->ctime = ticks; //update creation time
+  p->priority = 2; //init proc is set up with priority 2
   p->state = RUNNABLE;
 }
 
@@ -162,6 +177,7 @@ fork(void)
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
   np->ctime = ticks; //update creation time
+  np->priority = proc->priority; //copy the father's priority to the child
   np->state = RUNNABLE;
   release(&ptable.lock);
   
@@ -267,14 +283,18 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
 
   for(;;){
+
+#ifdef DEFAULT    
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    
+  struct proc * p;
+
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -292,6 +312,133 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       proc = 0;
     }
+#endif
+
+#ifdef FCFS
+  
+  // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);    
+    struct proc * p=0;
+    int minimunCTime=0;
+    struct proc *firstProc=0;
+  
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+      if (minimunCTime == 0)
+      {
+	minimunCTime = p->ctime;
+	firstProc = p;
+      }
+      else if (minimunCTime > p->ctime)
+      {
+	minimunCTime = p->ctime;
+	firstProc = p;
+      }
+    }
+    p = firstProc;
+
+    if (p)
+    {
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&cpu->scheduler, proc->context);
+    switchkvm();
+    }
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
+
+#endif
+    
+    
+#ifdef SML
+     // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    
+    //look for pariority queue
+    struct proc * p = 0;
+    
+    
+      
+    if (scanPar(HIGH_P)) {    
+      p = scanPar(HIGH_P);
+    }
+    else if (scanPar(MED_P)){
+      p = scanPar(MED_P);
+    }
+    else
+      p= scanPar(LOW_P);
+    
+   if (p)
+    {
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.    
+    proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&cpu->scheduler, proc->context);
+    switchkvm();
+    }
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
+    
+#endif  
+    
+#ifdef DML
+     // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    
+    //look for pariority queue
+    struct proc * p = 0;
+    
+    
+      
+    if (scanPar(HIGH_P)) {    
+      p = scanPar(HIGH_P);
+    }
+    else if (scanPar(MED_P)){
+      p = scanPar(MED_P);
+    }
+    else
+      p= scanPar(LOW_P);
+    
+   if (p)
+    {
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.    
+    proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&cpu->scheduler, proc->context);
+    switchkvm();
+    }
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    proc = 0;
+    
+#endif  
+    
+
     release(&ptable.lock);
 
   }
@@ -395,7 +542,12 @@ wakeup1(void *chan)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
+    {
       p->state = RUNNABLE;
+#ifdef DML
+      p->priority = HIGH_P;
+#endif
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -533,3 +685,10 @@ int wait2(int *retime, int *rutime, int *stime)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
 }
+#ifdef SML
+int set_prio(int priority)
+{
+  proc->priority=priority;
+  return 0;
+}
+#endif

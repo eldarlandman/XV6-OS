@@ -120,7 +120,9 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 int wait2(int *retime, int *rutime, int *stime);
-
+#ifdef SML
+int set_prio(int priority);
+#endif
 
 
 // swtch.S

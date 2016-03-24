@@ -31,3 +31,6 @@ SYSCALL(sleep)
 SYSCALL(uptime)
 SYSCALL(history)
 SYSCALL(wait2)
+#ifdef SML
+SYSCALL(set_prio)
+#endif

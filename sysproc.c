@@ -120,3 +120,16 @@ int sys_wait2(void)
   
   return wait2(retime, rutime, stime);
 }
+#ifdef SML
+int sys_set_prio(void)
+{
+  int newPriority;
+  if (argint(0, &newPriority) <0)
+    return -1;
+  
+  if (newPriority<1 || newPriority>3)
+    return -1;
+  
+  return set_prio(newPriority);
+}
+#endif
