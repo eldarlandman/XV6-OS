@@ -96,7 +96,9 @@ int statis [3][4];
   
   
   printf(1, "average time for CPU processes:    sleeping  time= %d || ready time=%d ||turnaround time= %d \n",
-  statis[CPU][STIME] / statis[CPU][TOTAL]  ,  statis[CPU][RETIME] / statis[CPU][TOTAL]  ,  (statis[CPU][STIME] +statis[CPU][RETIME]+ statis[CPU][RUTIME] ) / statis[CPU][TOTAL]  );
+  statis[CPU][STIME] / statis[CPU][TOTAL]  ,  
+  statis[CPU][RETIME] / statis[CPU][TOTAL]  ,  
+  (statis[CPU][STIME] +statis[CPU][RETIME]+ statis[CPU][RUTIME] ) / statis[CPU][TOTAL]  );
     
 printf(1, "average time for S_CPU processes:    sleeping  time= %d || ready time=%d ||turnaround time= %d \n",
   statis[S_CPU][STIME] / statis[S_CPU][TOTAL]  ,  statis[S_CPU][RETIME] / statis[S_CPU][TOTAL]  ,  (statis[S_CPU][STIME] +statis[S_CPU][RETIME]+ statis[S_CPU][RUTIME] ) / statis[S_CPU][TOTAL]  );

@@ -176,9 +176,12 @@ fork(void)
 
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
-  np->ctime = ticks; //update creation time
   np->priority = proc->priority; //copy the father's priority to the child
+  np->stime = 0;
+  np->retime = 0;
+  np->rutime = 0;
   np->state = RUNNABLE;
+  np->ctime = ticks; //update creation time
   release(&ptable.lock);
   
   return pid;

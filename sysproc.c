@@ -111,9 +111,9 @@ int sys_wait2(void)
   int * rutime;
   int * stime;
   
-  if (argptr(0, (char**)&stime, sizeof(int*)) < 0 ||
+  if (argptr(2, (char**)&stime, sizeof(int*)) < 0 ||
       argptr(1, (char**)&rutime, sizeof(int*)) < 0 ||
-      argptr(2, (char**)&retime, sizeof(int*)) < 0)
+      argptr(0, (char**)&retime, sizeof(int*)) < 0)
   {
     return -1;
   }

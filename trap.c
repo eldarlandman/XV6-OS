@@ -111,7 +111,9 @@ trap(struct trapframe *tf)
       cpu->quanta_counter = 0;
 #ifdef DML
       if (proc->priority != LOW_P)
+      {
 	proc->priority--;
+      }
 #endif
       yield();
     }
