@@ -177,9 +177,15 @@ fork(void)
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
   np->priority = proc->priority; //copy the father's priority to the child
+  //np->priority = 3;     
+  //since the child gets his father's priority, the first 2-3 child processes get priority = 2 
+  //and the rest start with priority = 1. the IO should have low waiting time but since they start with low priority the initial
+  //waiting time is resposnible for most of the total waiting time. if all processes will start with priority 3 
+  //the difference between IO and CPU and S-CPU in DML policy will be significant
   np->stime = 0;
   np->retime = 0;
   np->rutime = 0;
+  np->quanta_counter = 0;
   np->state = RUNNABLE;
   np->ctime = ticks; //update creation time
   release(&ptable.lock);
@@ -413,15 +419,14 @@ scheduler(void)
     struct proc * p = 0;
     
     
-      
-    if (scanPar(HIGH_P)) {    
-      p = scanPar(HIGH_P);
-    }
-    else if (scanPar(MED_P)){
+            p = scanPar(HIGH_P);
+    if (p == 0) {    
       p = scanPar(MED_P);
     }
-    else
+    if (p == 0){
       p= scanPar(LOW_P);
+    }
+
     
    if (p)
     {
@@ -530,9 +535,7 @@ sleep(void *chan, struct spinlock *lk)
   proc->chan = chan;
   proc->state = SLEEPING;
   #ifdef DML
-    struct proc *p = proc;
       proc->priority = HIGH_P;
-      p++;
 #endif
   sched();
 
