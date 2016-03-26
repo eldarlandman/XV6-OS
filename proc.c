@@ -529,6 +529,11 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
+  #ifdef DML
+    struct proc *p = proc;
+      proc->priority = HIGH_P;
+      p++;
+#endif
   sched();
 
   // Tidy up.
@@ -553,9 +558,6 @@ wakeup1(void *chan)
     if(p->state == SLEEPING && p->chan == chan)
     {
       p->state = RUNNABLE;
-#ifdef DML
-      p->priority = HIGH_P;
-#endif
     }
 }
 

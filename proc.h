@@ -20,8 +20,6 @@ struct cpu {
   struct cpu *cpu;
   struct proc *proc;           // The currently-running process.
   
-  //gal-eldar change - a counter that counts  the current proc's time ticks
-  int quanta_counter;
 };
 
 extern struct cpu cpus[NCPU];
@@ -82,6 +80,7 @@ struct proc {
   uint rutime; //running time
   
   uint priority;
+  int quanta_counter;
 };
 
 // Process memory is laid out contiguously, low addresses first:
