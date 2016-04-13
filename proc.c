@@ -30,9 +30,10 @@ int
 allocpid(void) 
 {
   int pid;
-  acquire(&ptable.lock);
-  pid = nextpid++;
-  release(&ptable.lock);
+  do {
+    pid=nextpid;
+  }while(!cas(&nextpid ,pid, pid+1));
+    
   return pid;
 }
 //PAGEBREAK: 32
