@@ -50,6 +50,21 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+//signal handler definition
+typedef void (*sig_handler)(int pid, int value);
+
+struct cstackframe {
+  int sender_pid;
+  int recepient_pid;
+  int value;
+  int used;
+  struct cstackframe *next;
+}
+
+struct cstack {
+  struct cstackframe frames[10];
+  struct cstackframe *head;
+}
 
 // Per-process state
 struct proc {
@@ -66,6 +81,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  void (*handler)(int , int ) sig_handler = -1;
+  struct cstack pendingSignals;
+  
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -74,5 +92,3 @@ struct proc {
 //   fixed-size stack
 //   expandable heap
 
-//signal handler definition
-typedef void (*sig_handler)(int pid, int value);

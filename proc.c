@@ -47,16 +47,17 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == UNUSED)
+    //if(p->state == UNUSED)
+    if(cas(&(p->state), UNUSED, EMBRYO))
       goto found;
-  release(&ptable.lock);
+  //release(&ptable.lock);
   return 0;
 
 found:
-  p->state = EMBRYO;  
-  release(&ptable.lock);
+  //p->state = EMBRYO;  
+  //release(&ptable.lock);
 
   p->pid = allocpid();
 
