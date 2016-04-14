@@ -73,3 +73,6 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+//signal handler definition
+typedef void (*sig_handler)(int pid, int value);

@@ -89,3 +89,25 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int sys_sigset(void)
+{
+  //TODO
+  return -1;
+}
+
+int sys_sigsend(void)
+{
+  //TODO
+  return -1;
+}
+int sys_sigret(void)
+{
+  //TODO
+  return -1;
+}
+int sys_sigpause(void)
+{
+  //TODO
+  return -1;
+}

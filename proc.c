@@ -495,3 +495,27 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+
+sig_handler sigset(sig_handler sig)
+{
+  //TODO
+  return 0;
+}
+
+int sigsend(int dest_pid, int value)
+{
+  //TODO
+  return -1;
+}
+
+void sigret(void)
+{
+  //TODO
+}
+
+int sigpause(void)
+{
+  //TODO
+  return -1;
+}
