@@ -23,7 +23,14 @@ static void wakeup1(void *chan);
 void
 pinit(void)
 {
+  struct proc * p;
   initlock(&ptable.lock, "ptable");
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    p->pendingSignals.head = &(p->pendingSignals.frames[0]);
+  }
+  release(&ptable.lock);
 }
 
 int 
@@ -36,6 +43,7 @@ allocpid(void)
     
   return pid;
 }
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -47,18 +55,13 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  //acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    //if(p->state == UNUSED)
     if(cas(&(p->state), UNUSED, EMBRYO))
       goto found;
-  //release(&ptable.lock);
   return 0;
 
 found:
-  //p->state = EMBRYO;  
-  //release(&ptable.lock);
-
+  
   p->pid = allocpid();
 
   // Allocate kernel stack.
@@ -112,6 +115,9 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  
+  p->handler = (void*) -1;
+  p->pendingSignals.head->used = 1;
 }
 
 // Grow current process's memory by n bytes.
@@ -169,6 +175,9 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
  
   pid = np->pid;
+  np->handler = proc->handler;
+  np->pendingSignals.head = &(np->pendingSignals.frames[0]);
+  np->pendingSignals.head->used = 0;
 
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
@@ -492,22 +501,49 @@ procdump(void)
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
-    }
+    }            
     cprintf("\n");
+    
   }
 }
 
 
 sig_handler sigset(sig_handler sig)
 {
-  //TODO
+  proc->handler = sig;
+  return sig;
+}
+
+int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
+{
+  if (cstack->head->used == 10)
+    return 0;
+  
+  struct cstackframe * csf = &(cstack->frames[cstack->head->used]);
+  csf->next = cstack->head;
+  csf->used = cstack->head->used + 1;
+  cstack->head = csf;
+  csf->sender_pid = sender_pid;
+  csf->recepient_pid = recepient_pid;
+  csf->value = value;
+  return 1;
+  
+}
+
+struct cstackframe * pop(struct cstack * cstack)
+{
   return 0;
 }
 
 int sigsend(int dest_pid, int value)
 {
-  //TODO
-  return -1;
+  struct proc *p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {   
+    if (p->pid == dest_pid)
+      break;
+  }
+  return push(&(p->pendingSignals), proc->pid, dest_pid, value);
 }
 
 void sigret(void)

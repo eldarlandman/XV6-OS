@@ -92,6 +92,11 @@ exec(char *path, char **argv)
   proc->sz = sz;
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
+  //set signal handler proc to default
+  proc->handler= (void*) -1;
+  proc->pendingSignals.head = &(proc->pendingSignals.frames[0]);
+  proc->pendingSignals.head->used = 0;
+  
   switchuvm(proc);
   freevm(oldpgdir);
   return 0;

@@ -92,14 +92,22 @@ sys_uptime(void)
 
 int sys_sigset(void)
 {
-  //TODO
-  return -1;
+  int sigHandler;
+  if (argint(0, &sigHandler) <0)
+    return -1;
+    
+  return (int)sigset((void*)sigHandler);
 }
 
 int sys_sigsend(void)
 {
-  //TODO
-  return -1;
+  int destPID, value;
+  if (argint(0, &destPID) <0)
+    return -1;
+    if (argint(1, &value) <0)
+    return -1;
+  
+  return sigsend(destPID, value);
 }
 int sys_sigret(void)
 {
