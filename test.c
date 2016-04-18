@@ -4,18 +4,21 @@
 
 void myHandler(int pid, int value)
 {
+ printf(2, "%d sent %d\n", pid, value); 
 }
 
 int
 main(void)
 {
-  int i, j;
-  for (i = 1; i<= 12; i++)
-  {
-    j = sigsend(2, i);
-    printf(2, "sent sig %d to pid=2 returned %d\n", i, j);
-  }
-  for (i = 0; i<= 1000000; i++){}
+  int i;
+  sigset(myHandler);
+  int pid = fork();
+  if (pid != 0)
+    sigsend(pid, 20);
   
-  return 0;
+  for (i = 0; i < 100000; ) {i++;}
+  if (pid != 0)
+    wait();
+  
+  exit();
 }

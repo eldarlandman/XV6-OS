@@ -17,6 +17,8 @@ static struct proc *initproc;
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
+extern void endInjectedSigRet(void);
+extern void injectedSigRet(void);
 
 static void wakeup1(void *chan);
 
@@ -117,7 +119,7 @@ userinit(void)
   p->state = RUNNABLE;
   
   p->handler = (void*) -1;
-  p->pendingSignals.head->used = 1;
+  p->pendingSignals.head->used = 0;
 }
 
 // Grow current process's memory by n bytes.
@@ -520,9 +522,10 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
     return 0;
   
   struct cstackframe * csf = &(cstack->frames[cstack->head->used]);
-  csf->next = cstack->head;
-  csf->used = cstack->head->used + 1;
-  cstack->head = csf;
+  csf->next = cstack->head; //update next to point to the previous  element on the stack 
+  csf->used = cstack->head->used + 1; //update the position of the new element
+  cstack->head = csf; //update head to point to the current element in the stack
+  //the next three lines update sender_pid, recepient_pid, value  process's fields  
   csf->sender_pid = sender_pid;
   csf->recepient_pid = recepient_pid;
   csf->value = value;
@@ -532,7 +535,16 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
 
 struct cstackframe * pop(struct cstack * cstack)
 {
-  return 0;
+  
+  struct cstackframe * curr_csf = cstack->head;
+  if (curr_csf->used == 0)
+    return 0;
+  else
+  {
+    curr_csf->used=0;
+    cstack->head = cstack->head->next;
+    return curr_csf;
+  }
 }
 
 int sigsend(int dest_pid, int value)
@@ -548,7 +560,7 @@ int sigsend(int dest_pid, int value)
 
 void sigret(void)
 {
-  //TODO
+  memmove(proc->tf, &proc->old_tf, sizeof(proc->old_tf) );
 }
 
 int sigpause(void)
@@ -556,3 +568,70 @@ int sigpause(void)
   //TODO
   return -1;
 }
+
+void applySig(void){
+
+      struct cstackframe * csf;
+      if (proc && proc->pendingSignals.head->used>0)
+      { //check if theres any pending signals which must be handled   
+	if ((int)proc->handler == -1)
+	{
+	  do
+	  {
+	    csf = pop(&proc->pendingSignals);
+	  }while (csf);
+	}
+	else
+	{
+	  memmove(&proc->old_tf, proc->tf, sizeof(proc->old_tf)); //deep backup of  registers before sig_handler executed
+	  struct proc *p = proc; //for debugging
+	  csf = pop(&proc->pendingSignals);
+	  //forcing user to execute SIG_RET
+	  uint sigRetSysCallCodeSize = endInjectedSigRet - injectedSigRet; //declared as global in trapasm.S
+	  void * espBackup = (void *)(proc->tf->esp - sigRetSysCallCodeSize); //backup the return address from sig_handler which we wish to postpone after calling to sig_ret
+	  memmove((void *)(proc->tf->esp - sigRetSysCallCodeSize),  injectedSigRet, sigRetSysCallCodeSize);//copy the injected code to the users stack
+	  proc->tf->esp -= sigRetSysCallCodeSize;
+	  memmove((int *)(proc->tf->esp - sizeof(csf->value)),  &(csf->value), sizeof(csf->value)); //push sig_handler args to the stack
+	  proc->tf->esp -= sizeof(csf->value);
+	  memmove( (int *)((proc->tf->esp) - sizeof(csf->sender_pid)),  &(csf->sender_pid), sizeof(csf->sender_pid));
+	  proc->tf->esp -= sizeof(csf->sender_pid);
+	  memmove( (void **)((proc->tf->esp) - sizeof(void *)), &espBackup, sizeof(espBackup) ); //push "ret address" to be the begining of sig_ret code
+	  proc->tf->esp -= sizeof(void*);
+	  void * ebpBackup = (void *)(proc->tf->ebp);
+	  memmove( (void **)((proc->tf->esp) - sizeof(void *)), &ebpBackup, sizeof(ebpBackup) ); //push "ret address" to be the begining of sig_ret code
+	  //proc->tf->esp -= sizeof(void*);
+	  proc->tf->ebp = proc->tf->esp;
+	  proc->tf->eip = (uint)proc->handler;    //jump to sig handler code
+	  p++;
+	}
+      }
+  }
+  
+  /*
+  if (proc && proc->pendingSignals.head->used > 0)
+  {
+      struct proc *p = proc;*/
+/*    if ((int)proc->handler == -1)
+    {
+      pop(&proc->pendingSignals);
+    }
+    else
+    {
+      memmove(&proc->old_tf, proc->tf, sizeof(proc->old_tf));
+      uint sigRetSysCallCodeSize = endInjectedSigRet - injectedSigRet;
+      void * espBackup = *((void **)(proc->tf->esp - 4));//TODO make sure the substraction is by 4 bytes and not 4 words
+      memmove((void *)(proc->tf->esp - 4), injectedSigRet, sizeof(void *));
+      struct cstackframe * csf = pop(&proc->pendingSignals);
+      *(int*)(proc->tf->esp) = csf->value;
+      *(int*)(proc->tf->esp + 4) = csf->sender_pid;
+      proc->tf->eip = (uint)proc->handler;
+      
+      
+      sigRetSysCallCodeSize++;
+      espBackup++;
+    //}
+      p++;
+      
+  }
+  */
+  

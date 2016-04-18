@@ -8,8 +8,8 @@
 #include "fs.h"
 #include "file.h"
 #include "mmu.h"
-#include "proc.h"
 #include "x86.h"
+#include "proc.h"
 
 #define COM1    0x3f8
 

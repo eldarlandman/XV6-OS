@@ -84,6 +84,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   void (*handler)(int , int );
   struct cstack pendingSignals;
+  struct trapframe old_tf; //old trap frame to hold all users regs while handling signal
   
 };
 
