@@ -26,11 +26,15 @@ void
 pinit(void)
 {
   struct proc * p;
+  int i;
   initlock(&ptable.lock, "ptable");
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
   {
     p->pendingSignals.head = &(p->pendingSignals.frames[0]);
+    for(i = 0; i < 9; i++)
+      p->pendingSignals.frames[i].next = &p->pendingSignals.frames[i + 1];
+    p->pendingSignals.frames[9].next = 0;
   }
   release(&ptable.lock);
 }
@@ -179,7 +183,9 @@ fork(void)
   pid = np->pid;
   np->handler = proc->handler;
   np->pendingSignals.head = &(np->pendingSignals.frames[0]);
-  np->pendingSignals.head->used = 0;
+  for (i = 0; i < 10; i++)
+    np->pendingSignals.frames[i].used = 0;
+    
 
   // lock to force the compiler to emit the np->state write last.
   acquire(&ptable.lock);
@@ -518,9 +524,27 @@ sig_handler sigset(sig_handler sig)
 
 int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
 {
-  if (cstack->head->used == 10)
-    return 0;
+  struct cstackframe * oldHead;
+  struct cstackframe * newHead;
+  do{
+	oldHead = cstack->head;
+	if (oldHead->used == 10)
+	  return 0;
+	else
+	{
+	  newHead = oldHead->next;
+	  newHead->used = oldHead->used + 1;
+	  newHead->sender_pid = sender_pid;
+	  newHead->recepient_pid = recepient_pid;
+	  newHead->value = value;
+	}
+  }while (!cas((int *)(&(cstack->head)) , (int)oldHead , (int)newHead));
   
+  //the next three lines update sender_pid, recepient_pid, value  process's fields  
+  return 1;
+  
+  
+  /*
   struct cstackframe * csf = &(cstack->frames[cstack->head->used]);
   csf->next = cstack->head; //update next to point to the previous  element on the stack 
   csf->used = cstack->head->used + 1; //update the position of the new element
@@ -530,19 +554,26 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
   csf->recepient_pid = recepient_pid;
   csf->value = value;
   return 1;
-  
+  */
 }
 
 struct cstackframe * pop(struct cstack * cstack)
 {
-  
   struct cstackframe * curr_csf = cstack->head;
   if (curr_csf->used == 0)
     return 0;
   else
   {
+    int newHeadLoc = curr_csf->used - 2;
+    if (newHeadLoc < 0)
+    {
+	cstack->head = &cstack->frames[0];
+    }
+    else
+    {
+      cstack->head = &cstack->frames[newHeadLoc];
+    }
     curr_csf->used=0;
-    cstack->head = cstack->head->next;
     return curr_csf;
   }
 }
@@ -599,7 +630,6 @@ void applySig(void){
 	  proc->tf->esp -= sizeof(void*);
 	  void * ebpBackup = (void *)(proc->tf->ebp);
 	  memmove( (void **)((proc->tf->esp) - sizeof(void *)), &ebpBackup, sizeof(ebpBackup) ); //push "ret address" to be the begining of sig_ret code
-	  //proc->tf->esp -= sizeof(void*);
 	  proc->tf->ebp = proc->tf->esp;
 	  proc->tf->eip = (uint)proc->handler;    //jump to sig handler code
 	  p++;
