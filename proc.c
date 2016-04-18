@@ -526,35 +526,33 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
 {
   struct cstackframe * oldHead;
   struct cstackframe * newHead;
+  int prevVal, prevSender;
   do{
 	oldHead = cstack->head;
 	if (oldHead->used == 10)
 	  return 0;
 	else
 	{
-	  newHead = oldHead->next;
+	  if (!oldHead->used)
+	  {
+	      newHead = oldHead;
+	  }
+	  else
+	  {
+	      newHead = oldHead->next;
+	  }
 	  newHead->used = oldHead->used + 1;
-	  newHead->sender_pid = sender_pid;
 	  newHead->recepient_pid = recepient_pid;
-	  newHead->value = value;
+	  prevVal = newHead->value;
+	  prevSender = newHead->sender_pid;
 	}
-  }while (!cas((int *)(&(cstack->head)) , (int)oldHead , (int)newHead));
+  }while (! (cas((int *)(&(cstack->head)) , (int)oldHead , (int)newHead) &&
+		  cas(&(newHead->sender_pid) , prevSender , sender_pid) &&
+		  cas(&(newHead->value) , prevVal , value)));
   
   //the next three lines update sender_pid, recepient_pid, value  process's fields  
   return 1;
   
-  
-  /*
-  struct cstackframe * csf = &(cstack->frames[cstack->head->used]);
-  csf->next = cstack->head; //update next to point to the previous  element on the stack 
-  csf->used = cstack->head->used + 1; //update the position of the new element
-  cstack->head = csf; //update head to point to the current element in the stack
-  //the next three lines update sender_pid, recepient_pid, value  process's fields  
-  csf->sender_pid = sender_pid;
-  csf->recepient_pid = recepient_pid;
-  csf->value = value;
-  return 1;
-  */
 }
 
 struct cstackframe * pop(struct cstack * cstack)
@@ -635,33 +633,4 @@ void applySig(void){
 	  p++;
 	}
       }
-  }
-  
-  /*
-  if (proc && proc->pendingSignals.head->used > 0)
-  {
-      struct proc *p = proc;*/
-/*    if ((int)proc->handler == -1)
-    {
-      pop(&proc->pendingSignals);
-    }
-    else
-    {
-      memmove(&proc->old_tf, proc->tf, sizeof(proc->old_tf));
-      uint sigRetSysCallCodeSize = endInjectedSigRet - injectedSigRet;
-      void * espBackup = *((void **)(proc->tf->esp - 4));//TODO make sure the substraction is by 4 bytes and not 4 words
-      memmove((void *)(proc->tf->esp - 4), injectedSigRet, sizeof(void *));
-      struct cstackframe * csf = pop(&proc->pendingSignals);
-      *(int*)(proc->tf->esp) = csf->value;
-      *(int*)(proc->tf->esp + 4) = csf->sender_pid;
-      proc->tf->eip = (uint)proc->handler;
-      
-      
-      sigRetSysCallCodeSize++;
-      espBackup++;
-    //}
-      p++;
-      
-  }
-  */
-  
+  }  
