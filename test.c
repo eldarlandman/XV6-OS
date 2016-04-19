@@ -3,7 +3,7 @@
 #include "fcntl.h"
 
 void myHandler(int pid, int value)
-{
+{  
  printf(2, "%d sent %d\n", pid, value); 
 }
 
@@ -14,10 +14,17 @@ main(void)
   sigset(myHandler);
   int pid = fork();
   if (pid != 0)
-    sigsend(pid, 20);
+  {
+    /*fork();
+    fork();
+    fork();*/
+    fork();
+    
+      sigsend(pid, 20);
+  }
   
   for (i = 0; i < 100000; ) {i++;}
-  if (pid != 0)
+  for (i = 0; i < 8; i++)
     wait();
   
   exit();

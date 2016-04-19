@@ -85,6 +85,7 @@ struct proc {
   void (*handler)(int , int );
   struct cstack pendingSignals;
   struct trapframe old_tf; //old trap frame to hold all users regs while handling signal
+  int handlingSignal; //a boolean field indicating that the process is currently handling a signal  and cannot handle another signal
   
 };
 

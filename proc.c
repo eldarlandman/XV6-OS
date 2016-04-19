@@ -35,6 +35,7 @@ pinit(void)
     for(i = 0; i < 9; i++)
       p->pendingSignals.frames[i].next = &p->pendingSignals.frames[i + 1];
     p->pendingSignals.frames[9].next = 0;
+    p->handlingSignal = 0;
   }
   release(&ptable.lock);
 }
@@ -182,6 +183,7 @@ fork(void)
  
   pid = np->pid;
   np->handler = proc->handler;
+  np->handlingSignal = 0;
   np->pendingSignals.head = &(np->pendingSignals.frames[0]);
   for (i = 0; i < 10; i++)
     np->pendingSignals.frames[i].used = 0;
@@ -526,6 +528,29 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
 {
   struct cstackframe * oldHead;
   struct cstackframe * newHead;
+  
+  do
+  {
+    oldHead = cstack->head;
+    if (oldHead == &cstack->frames[9])
+      return 0;
+    else if (oldHead->used)
+      newHead = oldHead + 1;
+    else
+      newHead = oldHead;
+  }while (!cas((int *)(&cstack->head), (int)oldHead, (int)newHead));
+  
+  do
+  {
+    newHead->recepient_pid = recepient_pid;
+  } while (!cas(&newHead->used, 0, 0));
+  newHead->value = value;
+  newHead->sender_pid = sender_pid;
+  newHead->used = 1;
+  return 1;
+  
+  /*struct cstackframe * oldHead;
+  struct cstackframe * newHead;
   int prevVal, prevSender;
   do{
 	oldHead = cstack->head;
@@ -549,32 +574,56 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
   }while (! (cas((int *)(&(cstack->head)) , (int)oldHead , (int)newHead) &&
 		  cas(&(newHead->sender_pid) , prevSender , sender_pid) &&
 		  cas(&(newHead->value) , prevVal , value)));
-  
+  */
   //the next three lines update sender_pid, recepient_pid, value  process's fields  
-  return 1;
   
 }
 
 struct cstackframe * pop(struct cstack * cstack)
 {
-  struct cstackframe * curr_csf = cstack->head;
-  if (curr_csf->used == 0)
+  struct cstackframe * oldHead = cstack->head;
+  if (!oldHead->used && oldHead == cstack->frames)
     return 0;
-  else
+  
+  struct cstackframe * newHead;
+  do
   {
-    int newHeadLoc = curr_csf->used - 2;
-    if (newHeadLoc < 0)
-    {
-	cstack->head = &cstack->frames[0];
-    }
+    oldHead = cstack->head;
+    if (oldHead == cstack->frames)
+      newHead = oldHead;
     else
-    {
-      cstack->head = &cstack->frames[newHeadLoc];
-    }
-    curr_csf->used=0;
-    return curr_csf;
+      newHead = oldHead - 1;
+  }while (!(cas(&oldHead->used, 1, 1) && cas((int *)(&cstack->head), (int)oldHead, (int)newHead)));
+  return oldHead;
+  
+/*  struct cstackframe * old_csf;
+  struct cstackframe * newHead;
+  int old_used;
+  int newHeadLoc=0;
+    do{
+	  old_csf=cstack->head;
+	  old_used=old_csf->used;
+	  
+	  if (old_csf->used == 0)
+	    return 0;	  
+	  else{	    
+	      newHeadLoc = old_csf->used - 2;
+	  }
+	  
+	  if (newHeadLoc < 0)
+	  {
+	      newHead = &cstack->frames[0];
+	  }
+	  else
+	  {
+	      newHead = &cstack->frames[newHeadLoc];
+	  }
+    
+    }while( ! ( && cas( (int*) &cstack->head ,(int)old_csf, (int)newHead)   && cas( (int*) &old_csf->used , (int)old_used, 0)) );
+      
+    return newHead;*/
   }
-}
+
 
 int sigsend(int dest_pid, int value)
 {
@@ -590,6 +639,7 @@ int sigsend(int dest_pid, int value)
 void sigret(void)
 {
   memmove(proc->tf, &proc->old_tf, sizeof(proc->old_tf) );
+  proc->handlingSignal = 0;
 }
 
 int sigpause(void)
@@ -601,7 +651,7 @@ int sigpause(void)
 void applySig(void){
 
       struct cstackframe * csf;
-      if (proc && proc->pendingSignals.head->used>0)
+      if (proc && proc->pendingSignals.head->used>0 && (proc->tf->cs & 3) == 3)
       { //check if theres any pending signals which must be handled   
 	if ((int)proc->handler == -1)
 	{
@@ -610,20 +660,24 @@ void applySig(void){
 	    csf = pop(&proc->pendingSignals);
 	  }while (csf);
 	}
-	else
+	else if (!proc->handlingSignal)
 	{
+	  proc->handlingSignal = 1;
 	  memmove(&proc->old_tf, proc->tf, sizeof(proc->old_tf)); //deep backup of  registers before sig_handler executed
 	  struct proc *p = proc; //for debugging
 	  csf = pop(&proc->pendingSignals);
+	  int sigVal = csf->value;
+	  int sigSender = csf->sender_pid;
+	  csf->used = 0;
 	  //forcing user to execute SIG_RET
 	  uint sigRetSysCallCodeSize = endInjectedSigRet - injectedSigRet; //declared as global in trapasm.S
 	  void * espBackup = (void *)(proc->tf->esp - sigRetSysCallCodeSize); //backup the return address from sig_handler which we wish to postpone after calling to sig_ret
 	  memmove((void *)(proc->tf->esp - sigRetSysCallCodeSize),  injectedSigRet, sigRetSysCallCodeSize);//copy the injected code to the users stack
 	  proc->tf->esp -= sigRetSysCallCodeSize;
-	  memmove((int *)(proc->tf->esp - sizeof(csf->value)),  &(csf->value), sizeof(csf->value)); //push sig_handler args to the stack
-	  proc->tf->esp -= sizeof(csf->value);
-	  memmove( (int *)((proc->tf->esp) - sizeof(csf->sender_pid)),  &(csf->sender_pid), sizeof(csf->sender_pid));
-	  proc->tf->esp -= sizeof(csf->sender_pid);
+	  memmove((int *)(proc->tf->esp - sizeof(sigVal)),  &(sigVal), sizeof(sigVal)); //push sig_handler args to the stack
+	  proc->tf->esp -= sizeof(sigVal);
+	  memmove( (int *)((proc->tf->esp) - sizeof(sigSender)),  &(sigSender), sizeof(sigSender));
+	  proc->tf->esp -= sizeof(sigSender);
 	  memmove( (void **)((proc->tf->esp) - sizeof(void *)), &espBackup, sizeof(espBackup) ); //push "ret address" to be the begining of sig_ret code
 	  proc->tf->esp -= sizeof(void*);
 	  void * ebpBackup = (void *)(proc->tf->ebp);
