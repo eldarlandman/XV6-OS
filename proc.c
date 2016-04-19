@@ -204,7 +204,7 @@ void
 exit(void)
 {
   struct proc *p;
-  int fd;
+  int fd, i;
 
   if(proc == initproc)
     panic("init exiting");
@@ -225,6 +225,10 @@ exit(void)
   acquire(&ptable.lock);
 
   proc->state = ZOMBIE;
+  proc->handler = (void*)-1;
+  proc->pendingSignals.head = &(proc->pendingSignals.frames[0]);
+  for (i = 0; i < 10; i++)
+    proc->pendingSignals.frames[i].used = 0;
 
   // Parent might be sleeping in wait().
   wakeup1(proc->parent);
@@ -633,7 +637,10 @@ int sigsend(int dest_pid, int value)
     if (p->pid == dest_pid)
       break;
   }
-  return push(&(p->pendingSignals), proc->pid, dest_pid, value);
+  if (p >= &ptable.proc[NPROC] && (p->state != 2 || p->state != 3 || p->state != 4))
+    return -1;
+  else
+    return push(&(p->pendingSignals), proc->pid, dest_pid, value);
 }
 
 void sigret(void)
