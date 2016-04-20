@@ -15,8 +15,8 @@ struct workerList
 int isPrime(int n) // assuming n > 1
 {
     int i;
-    if (n == 1) return 1;
-     if (n % 2 == 0) return 1;
+    if (n == 1) return 0;
+     if (n % 2 == 0) return 0;
      for(i = 3; i < n / 2; i+= 2)
      {
          if (n % i == 0)
@@ -71,7 +71,7 @@ void primsrvHandler(int pid, int value)
 void doWork(void)
 {
   while(1)
-    sleep(1);
+    sigpause();
 }
 
 void initWorkers(struct workerList * workersHead, int workerCount)
