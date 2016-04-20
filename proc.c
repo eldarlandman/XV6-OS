@@ -528,6 +528,7 @@ sig_handler sigset(sig_handler sig)
   return sig;
 }
 
+
 int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
 {
   struct cstackframe * oldHead;
@@ -551,35 +552,21 @@ int push(struct cstack * cstack, int sender_pid, int recepient_pid, int value)
   newHead->value = value;
   newHead->sender_pid = sender_pid;
   newHead->used = 1;
+  
+  //wake proccess who sleeping on channel as a result of pause
+  struct proc* p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {   
+    if (p->pid == recepient_pid)
+      {
+	wakeup((void*)&p->handler);
+	break;
+      }
+  }
+  
   return 1;
   
-  /*struct cstackframe * oldHead;
-  struct cstackframe * newHead;
-  int prevVal, prevSender;
-  do{
-	oldHead = cstack->head;
-	if (oldHead->used == 10)
-	  return 0;
-	else
-	{
-	  if (!oldHead->used)
-	  {
-	      newHead = oldHead;
-	  }
-	  else
-	  {
-	      newHead = oldHead->next;
-	  }
-	  newHead->used = oldHead->used + 1;
-	  newHead->recepient_pid = recepient_pid;
-	  prevVal = newHead->value;
-	  prevSender = newHead->sender_pid;
-	}
-  }while (! (cas((int *)(&(cstack->head)) , (int)oldHead , (int)newHead) &&
-		  cas(&(newHead->sender_pid) , prevSender , sender_pid) &&
-		  cas(&(newHead->value) , prevVal , value)));
-  */
-  //the next three lines update sender_pid, recepient_pid, value  process's fields  
+  
   
 }
 
@@ -598,34 +585,9 @@ struct cstackframe * pop(struct cstack * cstack)
     else
       newHead = oldHead - 1;
   }while (!(cas(&oldHead->used, 1, 1) && cas((int *)(&cstack->head), (int)oldHead, (int)newHead)));
-  return oldHead;
-  
-/*  struct cstackframe * old_csf;
-  struct cstackframe * newHead;
-  int old_used;
-  int newHeadLoc=0;
-    do{
-	  old_csf=cstack->head;
-	  old_used=old_csf->used;
-	  
-	  if (old_csf->used == 0)
-	    return 0;	  
-	  else{	    
-	      newHeadLoc = old_csf->used - 2;
-	  }
-	  
-	  if (newHeadLoc < 0)
-	  {
-	      newHead = &cstack->frames[0];
-	  }
-	  else
-	  {
-	      newHead = &cstack->frames[newHeadLoc];
-	  }
-    
-    }while( ! ( && cas( (int*) &cstack->head ,(int)old_csf, (int)newHead)   && cas( (int*) &old_csf->used , (int)old_used, 0)) );
-      
-    return newHead;*/
+
+  return oldHead;  
+
   }
 
 
@@ -651,8 +613,17 @@ void sigret(void)
 
 int sigpause(void)
 {
-  //TODO
-  return -1;
+  struct proc* p=proc;
+  if (!p->pendingSignals.head->used){
+      acquire(&ptable.lock);
+      p->chan=(int)&p->handler;
+      p->state=SLEEPING;
+      sched();
+      release(&ptable.lock);
+      /*sleep(&p->pid,&ptable.lock);*/
+  }
+  
+  return 0;
 }
 
 void applySig(void){

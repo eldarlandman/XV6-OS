@@ -116,6 +116,6 @@ int sys_sigret(void)
 }
 int sys_sigpause(void)
 {
-  //TODO
-  return -1;
+  sigpause();
+  return 0;
 }
