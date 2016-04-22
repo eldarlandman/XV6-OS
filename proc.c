@@ -46,11 +46,12 @@ pinit(void)
 int 
 allocpid(void) 
 {
+  pushcli();
   int pid;
   do {
     pid=nextpid;
   }while(!cas(&nextpid ,pid, pid+1));
-    
+    popcli();
   return pid;
 }
 
@@ -65,6 +66,7 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
+  pushcli();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
   {
     if(cas(&(p->state), UNUSED, EMBRYO))
@@ -108,7 +110,7 @@ userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
-  pushcli();
+  
   p = allocproc();
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
@@ -127,10 +129,10 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  p->state = RUNNABLE;
-  
   p->handler = (void*) -1;
   p->pendingSignals.head->used = 0;
+  
+  p->state = RUNNABLE;
 }
 
 // Grow current process's memory by n bytes.
@@ -164,7 +166,7 @@ fork(void)
   //**SILENCED** using volatile to force the np->state = runnable to be executed last
   //volatile struct proc *np;
   struct proc *np;
-  pushcli();
+
   // Allocate process.
   if((np = allocproc()) == 0)
     return -1;
@@ -251,6 +253,7 @@ exit(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == proc){
       p->parent = initproc;
+      while (p->state == M_ZOMBIE){}//might fail the concreate test, the child becomes a zombie too late and dont wake up init
       if(p->state == ZOMBIE)
         wakeup1(initproc);
     }
@@ -275,8 +278,8 @@ wait(void)
   //acquire(&ptable.lock);
     pushcli();
   for(;;){
-    proc->chan = (int)proc;
     proc->state = M_SLEEPING;
+    proc->chan = (int)proc;
     //proc->state = SLEEPING;    
     // Scan through table looking for zombie children.
     havekids = 0;
@@ -284,6 +287,7 @@ wait(void)
       if(p->parent != proc)
         continue;
       havekids = 1;
+      while (p->state == M_ZOMBIE){}//might fail the concreate test, the child becomes a zombie too late and dont wake up init
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
@@ -442,6 +446,7 @@ forkret(void)
 void
 sleep(void *chan, struct spinlock *lk)
 {
+  struct proc * p = proc;
   if(proc == 0)
     panic("sleep");
 
@@ -465,6 +470,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = (int)chan;
   proc->state = M_SLEEPING;
+  p++;
 
   sched();
 
@@ -531,6 +537,7 @@ kill(int pid)
       
       // Wake process from sleep if necessary.
       //cas will swap the state atomically
+      while(p->state == M_SLEEPING) {}
       cas(&p->state,SLEEPING,RUNNABLE);
       //if(p->state == SLEEPING)
         //p->state = RUNNABLE;
