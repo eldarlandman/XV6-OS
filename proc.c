@@ -162,9 +162,6 @@ int
 fork(void)
 {
   int i, pid;
-  //prevents the compiler from making optimizations on the np 
-  //**SILENCED** using volatile to force the np->state = runnable to be executed last
-  //volatile struct proc *np;
   struct proc *np;
 
   // Allocate process.
@@ -200,8 +197,6 @@ fork(void)
     np->pendingSignals.frames[i].used = 0;
     
 
-  // lock to force the compiler to emit the np->state write last.
-  //issue solved since np is valatile
   //acquire(&ptable.lock);
   pushcli();
   np->state = RUNNABLE;
@@ -237,7 +232,6 @@ exit(void)
   proc->cwd = 0;
 
   //acquire(&ptable.lock);
-  //is locked since the locking convention prior calling sched
   pushcli();
   proc->state = M_ZOMBIE;
   
@@ -259,10 +253,6 @@ exit(void)
     }
   }
 
-  // Jump into the scheduler, never to return.
-  //while(!cas(&proc->state,M_ZOMBIE,ZOMBIE);
-	
-  //popcli();
   sched();
   panic("zombie exit");
 }
@@ -280,7 +270,6 @@ wait(void)
   for(;;){
     proc->state = M_SLEEPING;
     proc->chan = (int)proc;
-    //proc->state = SLEEPING;    
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -313,8 +302,6 @@ wait(void)
       return -1;
     }
 
-    //proc->state = SLEEPING;
-    //popcli();
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sched();
   }
@@ -501,12 +488,6 @@ wakeup1(void *chan)
     }
   }
     
-    /*for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == (int)chan){
-      // Tidy up.
-      p->chan = 0;
-      p->state = RUNNABLE;
-    }*/
 }
 
 // Wake up all processes sleeping on chan.
