@@ -165,9 +165,7 @@ main(int argc, char *argv[])
 {
   int i;
   char s[MAX_DIGITS];
-  //char * s = &((char)input);
   int workerCount = atoi(argv[1]);
-  //struct workerList * workersHead = malloc(sizeof(struct workerList));
   if (argc == 2 && workerCount > 0)
   {
     int number;
