@@ -2,9 +2,9 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
-#include "x86.h"
 #include "proc.h"
 #include "defs.h"
+#include "x86.h"
 #include "elf.h"
 
 int
@@ -92,13 +92,6 @@ exec(char *path, char **argv)
   proc->sz = sz;
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
-  //set signal handler proc to default
-  proc->handler= (void*) -1;
-  proc->pendingSignals.head = &(proc->pendingSignals.frames[0]);
-  proc->handlingSignal = 0;
-  for (i = 0; i < 10; i++)
-    proc->pendingSignals.frames[i].used = 0;
-  
   switchuvm(proc);
   freevm(oldpgdir);
   return 0;

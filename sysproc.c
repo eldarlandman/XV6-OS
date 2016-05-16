@@ -89,33 +89,3 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
-
-int sys_sigset(void)
-{
-  int sigHandler;
-  if (argint(0, &sigHandler) <0)
-    return -1;
-    
-  return (int)sigset((void*)sigHandler);
-}
-
-int sys_sigsend(void)
-{
-  int destPID, value;
-  if (argint(0, &destPID) <0)
-    return -1;
-    if (argint(1, &value) <0)
-    return -1;
-  
-  return sigsend(destPID, value);
-}
-int sys_sigret(void)
-{
-  sigret();
-  return 0;
-}
-int sys_sigpause(void)
-{
-  sigpause();
-  return 0;
-}

@@ -14,15 +14,15 @@
 #include "param.h"
 #include "stat.h"
 #include "mmu.h"
-#include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-#include "buf.h"
 #include "fs.h"
+#include "buf.h"
 #include "file.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
+struct superblock sb;   // there should be one per dev, but we run with one dev
 
 // Read the super block.
 void
@@ -55,12 +55,10 @@ balloc(uint dev)
 {
   int b, bi, m;
   struct buf *bp;
-  struct superblock sb;
 
   bp = 0;
-  readsb(dev, &sb);
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb.ninodes));
+    bp = bread(dev, BBLOCK(b, sb));
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
@@ -81,11 +79,10 @@ static void
 bfree(int dev, uint b)
 {
   struct buf *bp;
-  struct superblock sb;
   int bi, m;
 
   readsb(dev, &sb);
-  bp = bread(dev, BBLOCK(b, sb.ninodes));
+  bp = bread(dev, BBLOCK(b, sb));
   bi = b % BPB;
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
@@ -102,8 +99,8 @@ bfree(int dev, uint b)
 // its size, the number of links referring to it, and the
 // list of blocks holding the file's content.
 //
-// The inodes are laid out sequentially on disk immediately after
-// the superblock. Each inode has a number, indicating its
+// The inodes are laid out sequentially on disk at
+// sb.startinode. Each inode has a number, indicating its
 // position on the disk.
 //
 // The kernel keeps a cache of in-use inodes in memory
@@ -163,9 +160,12 @@ struct {
 } icache;
 
 void
-iinit(void)
+iinit(int dev)
 {
   initlock(&icache.lock, "icache");
+  readsb(dev, &sb);
+  cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
+          sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
 }
 
 static struct inode* iget(uint dev, uint inum);
@@ -179,12 +179,9 @@ ialloc(uint dev, short type)
   int inum;
   struct buf *bp;
   struct dinode *dip;
-  struct superblock sb;
-
-  readsb(dev, &sb);
 
   for(inum = 1; inum < sb.ninodes; inum++){
-    bp = bread(dev, IBLOCK(inum));
+    bp = bread(dev, IBLOCK(inum, sb));
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
@@ -205,7 +202,7 @@ iupdate(struct inode *ip)
   struct buf *bp;
   struct dinode *dip;
 
-  bp = bread(ip->dev, IBLOCK(ip->inum));
+  bp = bread(ip->dev, IBLOCK(ip->inum, sb));
   dip = (struct dinode*)bp->data + ip->inum%IPB;
   dip->type = ip->type;
   dip->major = ip->major;
@@ -282,7 +279,7 @@ ilock(struct inode *ip)
   release(&icache.lock);
 
   if(!(ip->flags & I_VALID)){
-    bp = bread(ip->dev, IBLOCK(ip->inum));
+    bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;
     ip->type = dip->type;
     ip->major = dip->major;
@@ -652,3 +649,136 @@ nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
 }
+
+#include "fcntl.h"
+#define DIGITS 14
+
+char* itoa(int i, char b[]){
+    char const digit[] = "0123456789";
+    char* p = b;
+    if(i<0){
+        *p++ = '-';
+        i *= -1;
+    }
+    int shifter = i;
+    do{ //Move to where representation ends
+        ++p;
+        shifter = shifter/10;
+    }while(shifter);
+    *p = '\0';
+    do{ //Move back, inserting digits as u go
+        *--p = digit[i%10];
+        i = i/10;
+    }while(i);
+    return b;
+}
+//remove swap file of proc p;
+int
+removeSwapFile(struct proc* p)
+{
+	//path of proccess
+	char path[DIGITS];
+	memmove(path,"/.swap", 6);
+	itoa(p->pid, path+ 6);
+
+	struct inode *ip, *dp;
+	struct dirent de;
+	char name[DIRSIZ];
+	uint off;
+
+
+	begin_op();
+	if((dp = nameiparent(path, name)) == 0)
+	{
+		end_op();
+		return -1;
+	}
+
+	ilock(dp);
+
+	  // Cannot unlink "." or "..".
+	if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+	   goto bad;
+
+	if((ip = dirlookup(dp, name, &off)) == 0)
+		goto bad;
+	ilock(ip);
+
+	if(ip->nlink < 1)
+		panic("unlink: nlink < 1");
+	if(ip->type == T_DIR && !isdirempty(ip)){
+		iunlockput(ip);
+		goto bad;
+	}
+
+	memset(&de, 0, sizeof(de));
+	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+		panic("unlink: writei");
+	if(ip->type == T_DIR){
+		dp->nlink--;
+		iupdate(dp);
+	}
+	iunlockput(dp);
+
+	ip->nlink--;
+	iupdate(ip);
+	iunlockput(ip);
+
+	end_op();
+
+	return 0;
+
+	bad:
+		iunlockput(dp);
+		end_op();
+		return -1;
+
+}
+
+
+//return 0 on success
+int
+createSwapFile(struct proc* p)
+{
+
+	char path[DIGITS];
+	memmove(path,"/.swap", 6);
+	itoa(p->pid, path+ 6);
+
+    begin_op();
+    struct inode * in = create(path, T_FILE, 0, 0);
+	iunlock(in);
+
+	p->swapFile = filealloc();
+	if (p->swapFile == 0)
+		panic("no slot for files on /store");
+
+	p->swapFile->ip = in;
+	p->swapFile->type = FD_INODE;
+	p->swapFile->off = 0;
+	p->swapFile->readable = O_WRONLY;
+	p->swapFile->writable = O_RDWR;
+    end_op();
+
+    return 0;
+}
+
+//return as sys_write (-1 when error)
+int
+writeToSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size)
+{
+	p->swapFile->off = placeOnFile;
+
+	return filewrite(p->swapFile, buffer, size);
+
+}
+
+//return as sys_read (-1 when error)
+int
+readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size)
+{
+	p->swapFile->off = placeOnFile;
+
+	return fileread(p->swapFile, buffer,  size);
+}
+

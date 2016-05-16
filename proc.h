@@ -49,44 +49,27 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE , M_ZOMBIE, M_RUNNING, M_RUNNABLE, M_SLEEPING};
-//signal handler definition
-typedef void (*sig_handler)(int pid, int value);
-
-
-struct cstackframe {
-  int sender_pid;
-  int recepient_pid;
-  int value;
-  int used;
-  struct cstackframe *next;
-};
-
-struct cstack {
-  struct cstackframe frames[10];
-  struct cstackframe *head;
-};
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
-  volatile int state;          // Process state
+  enum procstate state;        // Process state
   int pid;                     // Process ID
   struct proc *parent;         // Parent process
   struct trapframe *tf;        // Trap frame for current syscall
   struct context *context;     // swtch() here to run process
-  volatile int chan;           // If non-zero, sleeping on chan
+  void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  void (*handler)(int , int );
-  struct cstack pendingSignals;
-  struct trapframe old_tf; //old trap frame to hold all users regs while handling signal
-  int handlingSignal; //a boolean field indicating that the process is currently handling a signal  and cannot handle another signal
-  
+
+  //Swap file. must initiate with create swap file
+  struct file *swapFile;			//page file
+
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -94,4 +77,3 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
-

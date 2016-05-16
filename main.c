@@ -3,8 +3,8 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
-#include "x86.h"
 #include "proc.h"
+#include "x86.h"
 
 static void startothers(void);
 static void mpmain(void)  __attribute__((noreturn));
@@ -31,7 +31,6 @@ main(void)
   tvinit();        // trap vectors
   binit();         // buffer cache
   fileinit();      // file table
-  iinit();         // inode cache
   ideinit();       // disk
   if(!ismp)
     timerinit();   // uniprocessor timer

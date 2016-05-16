@@ -3,8 +3,8 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
-#include "x86.h"
 #include "proc.h"
+#include "x86.h"
 #include "syscall.h"
 
 // User code makes a system call with INT T_SYSCALL.
@@ -98,10 +98,6 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
-extern int sys_sigset(void);
-extern int sys_sigsend(void);
-extern int sys_sigret(void);
-extern int sys_sigpause(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -125,17 +121,7 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-[SYS_sigset] sys_sigset,
-[SYS_sigsend] sys_sigsend,
-[SYS_sigret] sys_sigret,
-[SYS_sigpause] sys_sigpause,
 };
-
-sig_handler sigset(sig_handler );
-int sigsend(int dest_pid, int value);
-void sigret(void);
-int sigpause(void);
-
 
 void
 syscall(void)

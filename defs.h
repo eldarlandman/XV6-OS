@@ -39,7 +39,7 @@ int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
 struct inode*   ialloc(uint, short);
 struct inode*   idup(struct inode*);
-void            iinit(void);
+void            iinit(int dev);
 void            ilock(struct inode*);
 void            iput(struct inode*);
 void            iunlock(struct inode*);
@@ -51,7 +51,10 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
-
+int				createSwapFile(struct proc* p);
+int				readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
+int				writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
+int				removeSwapFile(struct proc* p);
 // ide.c
 void            ideinit(void);
 void            ideintr(void);
@@ -81,7 +84,7 @@ void            lapicstartap(uchar, uint);
 void            microdelay(int);
 
 // log.c
-void            initlog(void);
+void            initlog(int dev);
 void            log_write(struct buf*);
 void            begin_op();
 void            end_op();
@@ -118,15 +121,13 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-typedef void (*sig_handler)(int pid, int value);
-sig_handler sigset(sig_handler );
-int sigsend(int dest_pid, int value);
-void sigret(void);
-int sigpause(void);
-
 
 // swtch.S
 void            swtch(struct context**, struct context*);
+
+// sysfile
+struct inode*	create(char *path, short type, short major, short minor);
+int				isdirempty(struct inode *dp);
 
 // spinlock.c
 void            acquire(struct spinlock*);

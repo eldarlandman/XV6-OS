@@ -1,4 +1,3 @@
-#define SIGRET $24
 #include "mmu.h"
 
   # vectors.S sends all traps here.
@@ -24,13 +23,9 @@ alltraps:
   call trap
   addl $4, %esp
 
-
   # Return falls through to trapret...
 .globl trapret
 trapret:
-#pushl %esp
-call applySig   #extern applySig???
-#addl $4 , %esp
   popal
   popl %gs
   popl %fs
@@ -38,11 +33,3 @@ call applySig   #extern applySig???
   popl %ds
   addl $0x8, %esp  # trapno and errcode
   iret
-  
-  
-.global injectedSigRet
-.global endInjectedSigRet
-injectedSigRet:
-  movl SIGRET, %eax
-  int $64
-endInjectedSigRet:
