@@ -686,6 +686,11 @@ removeSwapFile(struct proc* p)
 	char name[DIRSIZ];
 	uint off;
 
+	if(0 == p->swapFile)
+	{
+		return -1;
+	}
+	fileclose(p->swapFile);
 
 	begin_op();
 	if((dp = nameiparent(path, name)) == 0)
