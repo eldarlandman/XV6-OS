@@ -47,6 +47,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  //TODO consider placing CreateSwapFile() here + create swap file
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -172,6 +173,7 @@ fork(void)
 void
 exit(void)
 {
+  //TODO cosider placing removeSwapFile here
   struct proc *p;
   int fd;
 

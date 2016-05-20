@@ -1,6 +1,9 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 
+#define MAX_PSYC_PAGES 15
+#define MAX_TOTAL_PAGES 30
+
 // Per-CPU state
 struct cpu {
   uchar id;                    // Local APIC ID; index into cpus[] below
@@ -69,6 +72,8 @@ struct proc {
 
   //Swap file. must initiate with create swap file
   struct file *swapFile;			//page file
+  short psycPagesCount;
+  short totalPagesCount;
 
 };
 
