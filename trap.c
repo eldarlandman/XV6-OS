@@ -46,7 +46,7 @@ trap(struct trapframe *tf)
     return;
   }
 
-  switch(tf->trapno){//TODO add case for page fault
+  switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
     if(cpu->id == 0){
       acquire(&tickslock);
@@ -76,6 +76,12 @@ trap(struct trapframe *tf)
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpu->id, tf->cs, tf->eip);
     lapiceoi();
+    break;
+    
+  case T_PGFLT:
+    //the processor fails to access the required page, it generates a trap (interrupt 14, T_PGFLT). 
+    //use the %CR2 register to determine the faulting address and identify the page
+    //allocNewPhysPage_fromFile(rcr2());
     break;
    
   //PAGEBREAK: 13

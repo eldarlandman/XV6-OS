@@ -4,8 +4,9 @@
 int main(void)
 {
   printf(2, "check\n");
-  int * p = (int*)1000000000;
-  (*p) = 5;
+  int i;
+  for (i = 0; i < 10; i++)
+    sbrk(5000);
   printf(2, "check\n");
   exit();
 }

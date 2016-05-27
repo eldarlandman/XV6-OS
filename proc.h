@@ -1,8 +1,12 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 
+//___________________OUR CHANGES___________________//
+
 #define MAX_PSYC_PAGES 15
 #define MAX_TOTAL_PAGES 30
+
+//___________________/OUR CHANGES___________________//
 
 // Per-CPU state
 struct cpu {
@@ -72,8 +76,6 @@ struct proc {
 
   //Swap file. must initiate with create swap file
   struct file *swapFile;			//page file
-  short psycPagesCount;
-  short totalPagesCount;
 
 };
 
