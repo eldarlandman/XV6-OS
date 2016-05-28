@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "elf.h"
 
+void applyNewAge(int);
+
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 struct segdesc gdt[NSEGS];
@@ -219,26 +221,54 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
-{
+{//TODO consider additions
   char *mem;
   uint a;
-
+  struct proc * p = proc;
+  
   if(newsz >= KERNBASE)
     return 0;
   if(newsz < oldsz)
     return oldsz;
 
-  a = PGROUNDUP(oldsz);
-  for(; a < newsz; a += PGSIZE){
-    mem = kalloc();
-    if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      deallocuvm(pgdir, newsz, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE);
-    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+  if (proc->psycPageCount < 15 || proc->pid <= 2)
+     //the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
+    //init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
+  {
+      a = PGROUNDUP(oldsz);
+      for(; a < newsz; a += PGSIZE){
+	mem = kalloc();
+	if(mem == 0){
+	  cprintf("allocuvm out of memory\n");
+	  deallocuvm(pgdir, newsz, oldsz);
+	  return 0;
+	}
+	memset(mem, 0, PGSIZE);
+	mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+	//the growing proc has not passed his 15 pages limit
+	proc->psycPageCount++;
+	proc->totalPageCount++;
+	applyNewAge(a / PGSIZE);
+      }
+      p++;
+      return newsz;
   }
+  else if (proc->psycPageCount > 15)
+  {
+    //void * va;
+   /* int i, j; 
+    int oldestPresentPageByVa = proc->pageAge[0];
+    
+    for (i = 1; i < 30; i++)
+    {
+      if (oldestPresentPageByVa >
+    }
+    */
+   p++;
+    return newsz;
+    //TODO clear room for the new page/pages
+  }
+  p++;
   return newsz;
 }
 
@@ -248,7 +278,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 // process size.  Returns the new process size.
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
-{
+{//TODO what if the page is not present but written to file?
   pte_t *pte;
   uint a, pa;
 
@@ -383,4 +413,21 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 //PAGEBREAK!
 // Blank page.
+
+void applyNewAge(int a)
+{
+  int i;
+  int maxAge = proc->pageAge[0];
+  for (i = 1; i < PAGE_AGE_SIZE; i++)
+  {
+    if (proc->pageAge[i] != 0 && maxAge < proc->pageAge[i])
+    {
+      maxAge = proc->pageAge[i];
+    }
+  }
+  maxAge++;
+  proc->pageAge[a] = maxAge;
+}
+    
+
 

@@ -77,6 +77,12 @@ trap(struct trapframe *tf)
             cpu->id, tf->cs, tf->eip);
     lapiceoi();
     break;
+    
+  case T_PGFLT:
+    //the processor fails to access the required page, it generates a trap (interrupt 14, T_PGFLT). 
+    //use the %CR2 register to determine the faulting address and identify the page
+    //allocNewPhysPage_fromFile(rcr2());
+    break;
    
   //PAGEBREAK: 13
   default:

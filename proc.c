@@ -47,6 +47,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  //TODO consider placing CreateSwapFile() here + create swap file
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -136,13 +137,37 @@ fork(void)
     return -1;
 
   // Copy process state from p.
-  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
+  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0 || (createSwapFile(np)) != 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
   np->sz = proc->sz;
+  /*
+  int pageCount = 0;
+  for(i = 0; i < sz; i += PGSIZE) pageCount++; 
+  //counts how many pages owned by the parent, duplicated to the child
+  //this loop is a copy of the loop in copyuvm*/
+  np->psycPageCount = proc->psycPageCount;
+  np->totalPageCount = proc->totalPageCount;
+  if (proc->pid != 1)
+  {//init does not have a swap file so there is no need to copy the swap file content and it's mapping
+      char buf[PGSIZE];
+      for (i = 0; i <=SWAP_FILE_MAPPING_SIZE; i++)
+      {
+	np->swapFileMapping[i] = proc->swapFileMapping[i];
+	readFromSwapFile(proc, (char*)&buf, PGSIZE * i, PGSIZE);
+	writeToSwapFile(np, (char*)&buf, PGSIZE * i, PGSIZE);
+      }
+      for (i = 0; i < 30; i++)
+      {
+	np->pageAge[i] = proc->pageAge[i];
+      }
+  }
+  //TODO make sure the file and the new fields are copied
+  
+  
   np->parent = proc;
   *np->tf = *proc->tf;
 
@@ -172,6 +197,7 @@ fork(void)
 void
 exit(void)
 {
+  //TODO cosider placing removeSwapFile here
   struct proc *p;
   int fd;
 
@@ -229,6 +255,7 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+	clearProcData(p);
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -463,4 +490,24 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+
+void clearProcData(struct proc * p)
+{
+  if (p ->pid == 1)
+    return;
+  int i;
+  p->psycPageCount = 0;
+  p->totalPageCount = 0;
+  for (i = 0; i <= 16; i++)
+  {
+    p->swapFileMapping[i] = (void *)-1;
+  }
+  for (i = 0; i < 30; i++)
+  {
+    p->pageAge[i] = 0;
+  }
+  removeSwapFile(p);
+  createSwapFile(p);
 }
