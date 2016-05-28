@@ -500,14 +500,18 @@ void clearProcData(struct proc * p)
   int i;
   p->psycPageCount = 0;
   p->totalPageCount = 0;
+  //char buf[PGSIZE];
+  //for (i = 0; i <= PGSIZE; i++)
+    //buf[i] = 0;
+  //TODO the commented part writes 0s to the file and enters a dead/live lock. 
+  //it mighit not be nccessary since we write the whole pages and read only the mapped parts
   for (i = 0; i <= 16; i++)
   {
     p->swapFileMapping[i] = (void *)-1;
+    //writeToSwapFile(p, (char*)&buf, PGSIZE * i, PGSIZE);
   }
   for (i = 0; i < 30; i++)
   {
     p->pageAge[i] = 0;
   }
-  removeSwapFile(p);
-  createSwapFile(p);
 }

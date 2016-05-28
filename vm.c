@@ -7,7 +7,13 @@
 #include "proc.h"
 #include "elf.h"
 
+//////////////////////our new private funtions//////////////
 void applyNewAge(int);
+int findOldestPage(void);
+int findAvailableSwapPage(void);
+void write_to_file_by_fifo_policy(pde_t *, uint, uint, uint);
+
+///////////////////////////////////////////////////////////////////////
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -19,7 +25,7 @@ void
 seginit(void)
 {
   struct cpu *c;
-
+  
   // Map "logical" addresses to virtual addresses using identity map.
   // Cannot share a CODE descriptor for both kernel and user
   // because it would have to have DPL_USR, but the CPU forbids
@@ -29,10 +35,10 @@ seginit(void)
   c->gdt[SEG_KDATA] = SEG(STA_W, 0, 0xffffffff, 0);
   c->gdt[SEG_UCODE] = SEG(STA_X|STA_R, 0, 0xffffffff, DPL_USER);
   c->gdt[SEG_UDATA] = SEG(STA_W, 0, 0xffffffff, DPL_USER);
-
+  
   // Map cpu, and curproc
   c->gdt[SEG_KCPU] = SEG(STA_W, &c->cpu, 8, 0);
-
+  
   lgdt(c->gdt, sizeof(c->gdt));
   loadgs(SEG_KCPU << 3);
   
@@ -49,7 +55,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
   pte_t *pgtab;
-
+  
   pde = &pgdir[PDX(va)];
   if(*pde & PTE_P){
     pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
@@ -120,10 +126,10 @@ static struct kmap {
   uint phys_end;
   int perm;
 } kmap[] = {
- { (void*)KERNBASE, 0,             EXTMEM,    PTE_W}, // I/O space
- { (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0},     // kern text+rodata
- { (void*)data,     V2P(data),     PHYSTOP,   PTE_W}, // kern data+memory
- { (void*)DEVSPACE, DEVSPACE,      0,         PTE_W}, // more devices
+  { (void*)KERNBASE, 0,             EXTMEM,    PTE_W}, // I/O space
+  { (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0},     // kern text+rodata
+  { (void*)data,     V2P(data),     PHYSTOP,   PTE_W}, // kern data+memory
+  { (void*)DEVSPACE, DEVSPACE,      0,         PTE_W}, // more devices
 };
 
 // Set up kernel part of a page table.
@@ -132,7 +138,7 @@ setupkvm(void)
 {
   pde_t *pgdir;
   struct kmap *k;
-
+  
   if((pgdir = (pde_t*)kalloc()) == 0)
     return 0;
   memset(pgdir, 0, PGSIZE);
@@ -140,9 +146,9 @@ setupkvm(void)
     panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start, 
-                (uint)k->phys_start, k->perm) < 0)
+      (uint)k->phys_start, k->perm) < 0)
       return 0;
-  return pgdir;
+    return pgdir;
 }
 
 // Allocate one page table for the machine for the kernel address
@@ -200,7 +206,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 {
   uint i, pa, n;
   pte_t *pte;
-
+  
   if((uint) addr % PGSIZE != 0)
     panic("loaduvm: addr must be page aligned");
   for(i = 0; i < sz; i += PGSIZE){
@@ -230,48 +236,79 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     return 0;
   if(newsz < oldsz)
     return oldsz;
-
-  if (proc->psycPageCount < 15 || proc->pid <= 2)
-     //the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
-    //init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
+  
+  a = PGROUNDUP(oldsz);
+  for(; a < newsz; a += PGSIZE)
   {
-      a = PGROUNDUP(oldsz);
-      for(; a < newsz; a += PGSIZE){
-	mem = kalloc();
-	if(mem == 0){
-	  cprintf("allocuvm out of memory\n");
-	  deallocuvm(pgdir, newsz, oldsz);
-	  return 0;
-	}
-	memset(mem, 0, PGSIZE);
-	mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
-	//the growing proc has not passed his 15 pages limit
-	proc->psycPageCount++;
-	proc->totalPageCount++;
-	applyNewAge(a / PGSIZE);
-      }
-      p++;
-      return newsz;
-  }
-  else if (proc->psycPageCount > 15)
-  {
-    //void * va;
-   /* int i, j; 
-    int oldestPresentPageByVa = proc->pageAge[0];
-    
-    for (i = 1; i < 30; i++)
+    if (proc->psycPageCount < 15 || proc->pid <= 2)
+      //the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
+      //init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
     {
-      if (oldestPresentPageByVa >
+      mem = kalloc();
+      if(mem == 0){
+	cprintf("allocuvm out of memory\n");
+	deallocuvm(pgdir, newsz, oldsz);
+	return 0;
+      }
+      memset(mem, 0, PGSIZE);
+      mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+      //the growing proc has not passed his 15 pages limit
+      proc->psycPageCount++;
+      proc->totalPageCount++;
+      applyNewAge(a / PGSIZE);
     }
-    */
-   p++;
-    return newsz;
-    //TODO clear room for the new page/pages
+    else if (proc->psycPageCount >= 15)
+    {
+      
+      //#ifdef FIFO
+      write_to_file_by_fifo_policy(pgdir, oldsz, newsz, a);
+      //#endif FIFO            
+      
+    }
   }
   p++;
   return newsz;
 }
 
+void
+write_to_file_by_fifo_policy(pde_t *pgdir, uint oldsz, uint newsz, uint a){
+  
+  char *mem;
+  
+  int oldestPageIndex = findOldestPage();
+  int availableSwapPageIndex = findAvailableSwapPage();
+  
+  //move physic page to file      
+  uint placeOnFile=availableSwapPageIndex*PGSIZE;//calculate the offset of the available page in the file
+  char* buffer=(char*)(oldestPageIndex*PGSIZE);//points the page which is swapped out to the disk
+  writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);//write the swapped out page
+  pte_t *  pte_swapped_out = walkpgdir(pgdir, buffer, 0); //extract pte of the swapped out page
+  *pte_swapped_out = (*pte_swapped_out)&(~PTE_P); //turn-off present flag
+  *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); //turn-on paged out flag
+  
+  uint pa = PTE_ADDR(*pte_swapped_out);
+  kfree((char*)p2v(pa));
+  //extract the PPN as physical address, convert to kernel virtual adress and free this page
+  
+  mem = kalloc();
+  if(mem == 0){
+    cprintf("allocuvm out of memory\n");
+    deallocuvm(pgdir, newsz, oldsz);
+    return;
+  }
+  memset(mem, 0, PGSIZE);
+  mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+  //the growing proc has not passed his 15 pages limit
+  proc->totalPageCount++;
+  applyNewAge(a / PGSIZE);
+}
+
+//void
+//read_from_file_fifo_policy(char* va){
+//}
+  
+  
+  
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -281,10 +318,10 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {//TODO what if the page is not present but written to file?
   pte_t *pte;
   uint a, pa;
-
+  
   if(newsz >= oldsz)
     return oldsz;
-
+  
   a = PGROUNDUP(newsz);
   for(; a  < oldsz; a += PGSIZE){
     pte = walkpgdir(pgdir, (char*)a, 0);
@@ -293,7 +330,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     else if((*pte & PTE_P) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
-        panic("kfree");
+	panic("kfree");
       char *v = p2v(pa);
       kfree(v);
       *pte = 0;
@@ -308,7 +345,7 @@ void
 freevm(pde_t *pgdir)
 {
   uint i;
-
+  
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, KERNBASE, 0);
@@ -327,7 +364,7 @@ void
 clearpteu(pde_t *pgdir, char *uva)
 {
   pte_t *pte;
-
+  
   pte = walkpgdir(pgdir, uva, 0);
   if(pte == 0)
     panic("clearpteu");
@@ -338,12 +375,12 @@ clearpteu(pde_t *pgdir, char *uva)
 // of it for a child.
 pde_t*
 copyuvm(pde_t *pgdir, uint sz)
-{
+{//TODO
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
   char *mem;
-
+  
   if((d = setupkvm()) == 0)
     return 0;
   for(i = 0; i < sz; i += PGSIZE){
@@ -360,8 +397,8 @@ copyuvm(pde_t *pgdir, uint sz)
       goto bad;
   }
   return d;
-
-bad:
+  
+  bad:
   freevm(d);
   return 0;
 }
@@ -372,7 +409,7 @@ char*
 uva2ka(pde_t *pgdir, char *uva)
 {
   pte_t *pte;
-
+  
   pte = walkpgdir(pgdir, uva, 0);
   if((*pte & PTE_P) == 0)
     return 0;
@@ -389,7 +426,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 {
   char *buf, *pa0;
   uint n, va0;
-
+  
   buf = (char*)p;
   while(len > 0){
     va0 = (uint)PGROUNDDOWN(va);
@@ -428,6 +465,33 @@ void applyNewAge(int a)
   maxAge++;
   proc->pageAge[a] = maxAge;
 }
-    
+
+int findOldestPage(void)
+{
+  int i;
+  int minPage = proc->pageAge[0];
+  int minPageIndex = 0;
+  for (i = 1; i < PAGE_AGE_SIZE; i++)
+  {
+    if (proc->pageAge[i] != 0 && minPage > proc->pageAge[i])
+    {
+      minPage = proc->pageAge[i];
+      minPageIndex = i;
+    }
+  }
+  return minPageIndex;
+}
+
+
+int findAvailableSwapPage(void)
+{
+  int i;
+  for (i = 0; i < SWAP_FILE_MAPPING_SIZE; i++)
+  {
+    if (proc->swapFileMapping[i] == (void*)-1)
+      return i;
+  }
+  return i;
+}
 
 
