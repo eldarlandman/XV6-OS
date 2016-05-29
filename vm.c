@@ -487,17 +487,28 @@ void applyNewAge(int a)
 
 int findOldestPage(void)
 {
-  int i;
-  int minPage = proc->pageAge[0];
-  int minPageIndex = 0;
-  for (i = 1; i < PAGE_AGE_SIZE; i++)
+  int i, minPage;
+  int minPageIndex = -1;
+  for (i = 0; i < PAGE_AGE_SIZE; i++)
   {
+    if (proc->pageAge[i] > 0)
+    {//find the first non zero age
+      minPage = proc->pageAge[i];
+      minPageIndex = i;
+      break;
+    }
+  }
+  for (; i < PAGE_AGE_SIZE; i++)
+  {//search for the smallest value = oldest page
     if (proc->pageAge[i] != 0 && minPage > proc->pageAge[i])
     {
       minPage = proc->pageAge[i];
       minPageIndex = i;
     }
   }
+  if (minPageIndex == -1)
+    panic("vm.findOldestPage: all ages are 0!");
+  proc->pageAge[minPageIndex] = 0;
   return minPageIndex;
 }
 
