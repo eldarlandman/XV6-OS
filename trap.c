@@ -81,7 +81,7 @@ trap(struct trapframe *tf)
     
   case T_PGFLT:
     //the processor fails to access the required page, it generates a trap (interrupt 14, T_PGFLT). 
-    //use the %CR2 register to determine the faulting address and identify the page
+    //use the %CR2 register t o determine the faulting address and identify the page
     move_page_to_file_by_fifo_policy(proc->pgdir);
     read_page_from_file((char*)rcr2());
     return;
