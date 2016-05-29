@@ -240,6 +240,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE)
   {
+    if (proc->pid > 2 && a > MAX_TOTAL_PAGES * PGSIZE)
+      panic("allocuvm: too many pages allocated");//if the process requests the 31th page it will cause a panic
     if (proc->psycPageCount < 15 || proc->pid <= 2)
       //the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
       //init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
@@ -313,6 +315,7 @@ read_page_from_file(char* va){
   for (i=0; i<=16; i++){
     if ( (uint)(proc->swapFileMapping[i]) == groundedVa)	//compare the mapped page to the required page
     {//found the page
+      proc->swapFileMapping[i] = (void*)-1;
       break;
     }
   }
@@ -353,6 +356,28 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       char *v = p2v(pa);
       kfree(v);
       *pte = 0;
+    }
+    else if((*pte & PTE_P) == 0 && (*pte & PTE_PG) != 0)
+    {//the deallocated page is swapped out
+      int i;
+      for (i = 0; i < SWAP_FILE_MAPPING_SIZE; i++)
+      {//find the mapping in the swap file and remove it. 
+	//this should be enough since this page in the file will be overwritten in the next swap out
+	if (proc->swapFileMapping[i] == (void*)a)
+	{
+	  proc->swapFileMapping[i] = (void*)-1;
+	  break;//found the location in the swap file
+	}
+      }
+      proc->pageAge[a / PGSIZE] = 0;	//clear page age
+      *pte = (*pte & (~PTE_PG));		//clear the swapped out flag
+      pa = PTE_ADDR(*pte);			//free the page
+      if(pa == 0)
+	panic("kfree");
+      char *v = p2v(pa);
+      kfree(v);
+      *pte = 0;
+
     }
   }
   return newsz;
@@ -405,7 +430,7 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))//TODO apply modification
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);

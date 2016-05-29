@@ -153,37 +153,33 @@ fork(void)
   np->totalPageCount = proc->totalPageCount;
   if (proc->pid != 1)
   {//init does not have a swap file so there is no need to copy the swap file content and it's mapping
-    char buf;
-    int i=0;
+    char * buf = kalloc();
+    int i, read;
     
-    while (readFromSwapFile(proc, &buf, i, 1)>0){      
-      writeToSwapFile(np, &buf, i, 1);
-      i++;
-    }
+    /*while (readFromSwapFile(proc, &buf, i, 1)>0){      
+     *      writeToSwapFile(np, &buf, i, 1);
+     *      i++;
+  }*/
     
-    for (i = 0; i <=SWAP_FILE_MAPPING_SIZE; i++) //pages loop
+    for (i = 0; i <SWAP_FILE_MAPPING_SIZE; i++) //pages loop
     {
       np->swapFileMapping[i] = proc->swapFileMapping[i];
     }
     
-    /*for (i = 0; i <=SWAP_FILE_MAPPING_SIZE; i++) //pages loop
-     *    {
-     *      for(j=0; j<PGSIZE; j++){ //reads byte-by-byte from page i 
-     *	
-     *	read = readFromSwapFile(proc, &buf, PGSIZE * i, 1);
-     *	if (read < 0)    { break;} //no data was read and so we break the loop
-     *	writeToSwapFile(np, &buf, PGSIZE * i+j, 1);
-  }
-  
-  np->swapFileMapping[i] = proc->swapFileMapping[i];
-  if (read < 0)    { break;}
+    for (i = 0; i <SWAP_FILE_MAPPING_SIZE; i++) //pages loop
+    {
+      read = readFromSwapFile(proc, buf, PGSIZE * i, PGSIZE);
+      if (read < 0)    { break;} //no data was read and so we break the loop
+      writeToSwapFile(np, buf, PGSIZE * i, read);
+    }
+    kfree(buf);
   }
   
   for (i = 0; i < 30; i++)
   {
   np->pageAge[i] = proc->pageAge[i];
-  }*/
   }
+  
   
   //TODO make sure the file and the new fields are copied
   
