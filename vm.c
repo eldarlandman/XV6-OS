@@ -394,7 +394,7 @@ clearpteu(pde_t *pgdir, char *uva)
 // of it for a child.
 pde_t*
 copyuvm(pde_t *pgdir, uint sz)
-{//TODO
+{
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
@@ -405,7 +405,7 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
+    if(!(*pte & PTE_P))//TODO apply modification
       panic("copyuvm: page not present");
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
