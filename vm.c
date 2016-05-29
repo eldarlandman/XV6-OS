@@ -261,8 +261,20 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     {
       
       //#ifdef FIFO
-      write_to_file_by_fifo_policy(pgdir, oldsz, newsz, a);
-      //#endif FIFO            
+      move_page_to_file_by_fifo_policy(pgdir);
+      //#endif FIFO
+      
+      mem = kalloc();
+      if(mem == 0){
+	cprintf("allocuvm out of memory\n");
+	deallocuvm(pgdir, newsz, oldsz);
+	return 0;
+      }
+      memset(mem, 0, PGSIZE);
+      mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+      //the growing proc has not passed his 15 pages limit
+      proc->totalPageCount++;
+      applyNewAge(a / PGSIZE);
       
     }
   }
@@ -271,44 +283,51 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 }
 
 void
-write_to_file_by_fifo_policy(pde_t *pgdir, uint oldsz, uint newsz, uint a){
-  
-  char *mem;
+move_page_to_file_by_fifo_policy(pde_t *pgdir){
+   
   
   int oldestPageIndex = findOldestPage();
   int availableSwapPageIndex = findAvailableSwapPage();
   
-  //move physic page to file      
-  uint placeOnFile=availableSwapPageIndex*PGSIZE;//calculate the offset of the available page in the file
-  char* buffer=(char*)(oldestPageIndex*PGSIZE);//points the page which is swapped out to the disk
-  writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);//write the swapped out page
-  pte_t *  pte_swapped_out = walkpgdir(pgdir, buffer, 0); //extract pte of the swapped out page
-  *pte_swapped_out = (*pte_swapped_out)&(~PTE_P); //turn-off present flag
-  *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); //turn-on paged out flag
+  //move physic page to file 
+  uint placeOnFile=availableSwapPageIndex*PGSIZE;			//calculate the offset of the available page in the file
+  char* buffer=(char*)(oldestPageIndex*PGSIZE);				//points the page which is swapped out to the disk
+  proc->swapFileMapping[availableSwapPageIndex] = buffer;	//update the mapping of virtual address to file offset
+  writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);			//write the swapped out page
+  pte_t *  pte_swapped_out = walkpgdir(pgdir, buffer, 0); 		//extract pte of the swapped out page
+  *pte_swapped_out = (*pte_swapped_out)&(~PTE_P); 			//turn-off present flag
+  *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); 			//turn-on paged out flag
   
   uint pa = PTE_ADDR(*pte_swapped_out);
   kfree((char*)p2v(pa));
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
   
-  mem = kalloc();
-  if(mem == 0){
-    cprintf("allocuvm out of memory\n");
-    deallocuvm(pgdir, newsz, oldsz);
-    return;
-  }
-  memset(mem, 0, PGSIZE);
-  mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
-  //the growing proc has not passed his 15 pages limit
-  proc->totalPageCount++;
-  applyNewAge(a / PGSIZE);
+  
 }
 
-//void
-//read_from_file_fifo_policy(char* va){
-//}
+void
+read_page_from_file(char* va){
   
-  
-  
+  int i;
+  uint groundedVa = PGROUNDDOWN((uint)va);			//find the virtual address of the page that caused the page fault
+  for (i=0; i<=16; i++){
+    if ( (uint)(proc->swapFileMapping[i]) == groundedVa)	//compare the mapped page to the required page
+    {//found the page
+      break;
+    }
+  }
+  char *mem=kalloc();	//allocate new physical page for the retrieved page
+  if(mem == 0)
+  {//allocation failed
+    panic("memory allocation failed");
+    return;
+  }
+  readFromSwapFile(proc, mem, i * PGSIZE, PGSIZE);	//read from file to the newly allocated page
+  mappages(proc->pgdir, (char*)groundedVa, PGSIZE, v2p(mem), PTE_W|PTE_U);	//map the page's virtual address to the physical address
+}
+
+
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual

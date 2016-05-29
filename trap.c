@@ -36,6 +36,7 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+  struct proc * p = proc;
   if(tf->trapno == T_SYSCALL){
     if(proc->killed)
       exit();
@@ -81,7 +82,9 @@ trap(struct trapframe *tf)
   case T_PGFLT:
     //the processor fails to access the required page, it generates a trap (interrupt 14, T_PGFLT). 
     //use the %CR2 register to determine the faulting address and identify the page
-    //allocNewPhysPage_fromFile(rcr2());
+    move_page_to_file_by_fifo_policy(proc->pgdir);
+    read_page_from_file((char*)rcr2());
+    return;
     break;
    
   //PAGEBREAK: 13
@@ -114,4 +117,6 @@ trap(struct trapframe *tf)
   // Check if the process has been killed since we yielded
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)
     exit();
+  
+  p++;
 }
