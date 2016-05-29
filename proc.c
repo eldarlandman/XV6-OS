@@ -279,12 +279,14 @@ wait(void)
 	kfree(p->kstack);
 	p->kstack = 0;
 	freevm(p->pgdir);
-	p->state = UNUSED;
-	p->pid = 0;
+	p->state = M_UNUSED;
 	p->parent = 0;
 	p->name[0] = 0;
 	p->killed = 0;
 	release(&ptable.lock);
+	removeSwapFile(p);
+	p->pid = 0;
+	p->state = UNUSED;
 	return pid;
       }
     }
@@ -487,7 +489,8 @@ procdump(void)
     [SLEEPING]  "sleep ",
     [RUNNABLE]  "runble",
     [RUNNING]   "run   ",
-    [ZOMBIE]    "zombie"
+    [ZOMBIE]    "zombie",
+    [M_UNUSED] "-unused"
   };
   int i;
   struct proc *p;
