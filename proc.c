@@ -149,6 +149,28 @@ fork(void)
    *  for(i = 0; i < sz; i += PGSIZE) pageCount++; 
    *  //counts how many pages owned by the parent, duplicated to the child
    *  //this loop is a copy of the loop in copyuvm*/
+  
+  for (i = 0; i < 30; i++)
+  {
+  np->pageAge[i] = proc->pageAge[i];
+  }
+  
+  
+  //TODO make sure the file and the new fields are copied
+  
+  np->parent = proc;
+  *np->tf = *proc->tf;
+  
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+  
+  for(i = 0; i < NOFILE; i++)
+    if(proc->ofile[i])
+      np->ofile[i] = filedup(proc->ofile[i]);
+    np->cwd = idup(proc->cwd);
+  
+  safestrcpy(np->name, proc->name, sizeof(proc->name));
+  
   np->psycPageCount = proc->psycPageCount;
   np->totalPageCount = proc->totalPageCount;
   if (proc->pid != 1)
@@ -174,28 +196,6 @@ fork(void)
     }
     kfree(buf);
   }
-  
-  for (i = 0; i < 30; i++)
-  {
-  np->pageAge[i] = proc->pageAge[i];
-  }
-  
-  
-  //TODO make sure the file and the new fields are copied
-  
-  np->parent = proc;
-  *np->tf = *proc->tf;
-  
-  // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
-  
-  for(i = 0; i < NOFILE; i++)
-    if(proc->ofile[i])
-      np->ofile[i] = filedup(proc->ofile[i]);
-    np->cwd = idup(proc->cwd);
-  
-  safestrcpy(np->name, proc->name, sizeof(proc->name));
-  
   pid = np->pid;
   
   // lock to force the compiler to emit the np->state write last.

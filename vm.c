@@ -422,23 +422,35 @@ copyuvm(pde_t *pgdir, uint sz)
 {
   pde_t *d;
   pte_t *pte;
+  pte_t *npte;
   uint pa, i, flags;
   char *mem;
   
   if((d = setupkvm()) == 0)
     return 0;
   for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0) //points to father's page table entry i
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG)) //case 1 : the page is not present on RAM, neither paged out
       panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)p2v(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, v2p(mem), flags) < 0)
-      goto bad;
+    if((*pte & PTE_P)) //case2: page is present on RAM
+    {
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte);
+      if((mem = kalloc()) == 0)
+	goto bad;
+      memmove(mem, (char*)p2v(pa), PGSIZE); //deep copy of the content in pa to the new allocated mem
+      if(mappages(d, (void*)i, PGSIZE, v2p(mem), flags) < 0) //map mem to virtual address. using walkpgdir inside
+	goto bad;
+    }
+    else if (!(*pte & PTE_P) && (*pte & PTE_PG)) //case 3: page is not on RAM but swapped out
+    {
+	if((npte = walkpgdir(d, (void*)i, 1)) == 0) //hence, no need for allocating new page just copy the flags
+	  goto bad;
+	if(*npte & PTE_P)
+	  panic("remap");
+	*npte = (*pte);
+    }
   }
   return d;
   

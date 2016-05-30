@@ -8,7 +8,7 @@ int main(void)
   char c = 'a';
   for (i = 0; i < 20; i++)
   {
-    n = (int)sbrk(4100);
+    n = (int)sbrk(4096);
     *((char*)n) = c;
     printf(2, "allocation %d allcated address %d wrote %c\n", i, n, c);
     c++;
@@ -18,7 +18,7 @@ int main(void)
     for (i = 0; i < 20; i++)
     {
       printf(2, "found %c on %d\n", *((char*)n), n);
-      n = n - 4100;
+      n = n - 4096;
     }
   }
   printf(2, "finish\n");
