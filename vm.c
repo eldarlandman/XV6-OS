@@ -286,7 +286,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
 void
 move_page_to_file_by_fifo_policy(pde_t *pgdir){
-   
+   struct proc *p = proc;
   
   int oldestPageIndex = findOldestPage();
   int availableSwapPageIndex = findAvailableSwapPage();
@@ -302,14 +302,15 @@ move_page_to_file_by_fifo_policy(pde_t *pgdir){
   
   uint pa = PTE_ADDR(*pte_swapped_out);
   kfree((char*)p2v(pa));
+  cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
-  
+  p++;
   
 }
 
 void
 read_page_from_file(char* va){
-  
+  struct proc * p = proc;
   int i;
   uint groundedVa = PGROUNDDOWN((uint)va);			//find the virtual address of the page that caused the page fault
   for (i=0; i<=16; i++){
@@ -319,14 +320,21 @@ read_page_from_file(char* va){
       break;
     }
   }
+  if (i > 16)
+  {
+    panic("read_page_from_file: searched for page on file but could not find it!\n");
+  }
   char *mem=kalloc();	//allocate new physical page for the retrieved page
   if(mem == 0)
   {//allocation failed
     panic("memory allocation failed");
     return;
   }
-  readFromSwapFile(proc, mem, i * PGSIZE, PGSIZE);	//read from file to the newly allocated page
+  int read = readFromSwapFile(proc, mem, i * PGSIZE, PGSIZE);	//read from file to the newly allocated page
   mappages(proc->pgdir, (char*)groundedVa, PGSIZE, v2p(mem), PTE_W|PTE_U);	//map the page's virtual address to the physical address
+  applyNewAge(groundedVa / PGSIZE);
+  cprintf("read page: loaded %d located in file partition %d. total %d bytes\n", groundedVa / PGSIZE, i, read);
+  p++;
 }
 
 

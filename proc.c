@@ -214,6 +214,7 @@ exit(void)
 {
   //TODO cosider placing removeSwapFile here
   struct proc *p;
+  struct proc * pp = proc;
   int fd;
   
   if(proc == initproc)
@@ -245,7 +246,7 @@ exit(void)
 	wakeup1(initproc);
     }
   }
-  
+  pp++;
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
   sched();
@@ -258,6 +259,7 @@ int
 wait(void)
 {
   struct proc *p;
+  struct proc *pp = proc;
   int havekids, pid;
   
   acquire(&ptable.lock);
@@ -296,6 +298,7 @@ wait(void)
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
+  pp++;
 }
 
 //PAGEBREAK: 42
