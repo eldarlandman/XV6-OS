@@ -72,6 +72,16 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   return &pgtab[PTX(va)];
 }
 
+int testFault(char * va)
+{
+  pte_t * pte = 0;
+  if (proc)
+    pte = walkpgdir(proc->pgdir, va ,0);
+  if (pte && (*pte & PTE_PG) != 0){
+      return 1;
+  }
+  return 0;
+}
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
@@ -249,7 +259,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       mem = kalloc();
       if(mem == 0){
 	cprintf("allocuvm out of memory\n");
-	deallocuvm(pgdir, newsz, oldsz);
+	deallocuvm(pgdir, newsz, oldsz, proc);
 	return 0;
       }
       memset(mem, 0, PGSIZE);
@@ -269,7 +279,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       mem = kalloc();
       if(mem == 0){
 	cprintf("allocuvm out of memory\n");
-	deallocuvm(pgdir, newsz, oldsz);
+	deallocuvm(pgdir, newsz, oldsz, proc);
 	return 0;
       }
       memset(mem, 0, PGSIZE);
@@ -344,7 +354,7 @@ read_page_from_file(char* va){
 // need to be less than oldsz.  oldsz can be larger than the actual
 // process size.  Returns the new process size.
 int
-deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
+deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
 {//TODO what if the page is not present but written to file?
   pte_t *pte;
   uint a, pa;
@@ -365,19 +375,20 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       kfree(v);
       *pte = 0;
     }
-    else if((*pte & PTE_P) == 0 && (*pte & PTE_PG) != 0)
+    else if((*pte & PTE_P) == 0 && (*pte & PTE_PG) != 0 && p != (struct proc *)-1)
     {//the deallocated page is swapped out
       int i;
       for (i = 0; i < SWAP_FILE_MAPPING_SIZE; i++)
       {//find the mapping in the swap file and remove it. 
 	//this should be enough since this page in the file will be overwritten in the next swap out
-	if (proc->swapFileMapping[i] == (void*)a)
+	if (p->swapFileMapping[i] == (void*)a)
 	{
-	  proc->swapFileMapping[i] = (void*)-1;
+	  p->swapFileMapping[i] = (void*)-1;
 	  break;//found the location in the swap file
 	}
       }
-      proc->pageAge[a / PGSIZE] = 0;	//clear page age
+      if (p != (struct proc *)-1)
+	p->pageAge[a / PGSIZE] = 0;	//clear page age
       *pte = (*pte & (~PTE_PG));		//clear the swapped out flag
       pa = PTE_ADDR(*pte);			//free the page
       if(pa == 0)
@@ -394,13 +405,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 // Free a page table and all the physical memory pages
 // in the user part.
 void
-freevm(pde_t *pgdir)
+freevm(pde_t *pgdir, struct proc * p)
 {
   uint i;
   
   if(pgdir == 0)
     panic("freevm: no pgdir");
-  deallocuvm(pgdir, KERNBASE, 0);
+  deallocuvm(pgdir, KERNBASE, 0, p);
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = p2v(PTE_ADDR(pgdir[i]));
@@ -463,7 +474,7 @@ copyuvm(pde_t *pgdir, uint sz)
   return d;
   
   bad:
-  freevm(d);
+  freevm(d, (struct proc *)-1);
   return 0;
 }
 

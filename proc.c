@@ -115,7 +115,7 @@ growproc(int n)
     if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
       return -1;
   } else if(n < 0){
-    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
+    if((sz = deallocuvm(proc->pgdir, sz, sz + n, proc)) == 0)
       return -1;
   }
   proc->sz = sz;
@@ -276,7 +276,7 @@ wait(void)
 	pid = p->pid;
 	kfree(p->kstack);
 	p->kstack = 0;
-	freevm(p->pgdir);
+	freevm(p->pgdir, p);
 	p->state = M_UNUSED;
 	p->parent = 0;
 	p->name[0] = 0;

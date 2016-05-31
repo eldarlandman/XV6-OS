@@ -21,7 +21,7 @@ int main(void)
       n = n - 4096;
     }
   }
-  printf(2, "finish\n");
+  printf(2, "finish %d\n",getpid());
   wait();
   exit();
 }
