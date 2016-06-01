@@ -151,8 +151,8 @@ fork(void)
   
   for (i = 0; i < 30; i++)
   {
-  np->pageAge[i] = proc->pageAge[i];
-  np->LRUAge[i] = proc->LRUAge[i];
+    np->pageAge[i] = proc->pageAge[i];
+    np->LRUAge[i] = proc->LRUAge[i];
   }
   
   
@@ -213,6 +213,37 @@ exit(void)
   struct proc *p;
   struct proc * pp = proc;
   int fd;
+  
+#ifdef VERBOSE_PRINT_TRUE
+    char *state;
+    
+    
+    static char *states[] = {
+      [UNUSED]    "unused",
+      [EMBRYO]    "embryo",
+      [SLEEPING]  "sleep ",
+      [RUNNABLE]  "runble",
+      [RUNNING]   "run   ",
+      [ZOMBIE]    "zombie",
+      [M_UNUSED] "-unused"
+    };
+    
+    if ((proc->pid > 2) &&	
+      !((proc->name[0] == 's') && (proc->name[1] == 'h') &&
+      (proc->name[2] == 0))) //make sure this is not shell (matan's recomendation in office hours)
+      {
+	if(proc->state >= 0 && proc->state < NELEM(states) && states[proc->state])
+	  state = states[proc->state];
+	else
+	  state = "???";
+	
+	cprintf("%d %s %d %d %d %d %s\n", 
+		proc->pid, state, proc->totalPageCount, (proc->totalPageCount - proc->psycPageCount), 
+		proc->pageFaultCounter, proc->pagedOutCounter, proc->name);
+	printFreePagesPercentage();
+      }
+      
+#endif
   
   if(proc == initproc)
     panic("init exiting");
@@ -500,7 +531,16 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    if (p->pid <= 2)
+    {
+      cprintf("%d %s %s", p->pid, state, p->name);
+    }
+    else
+    {
+      cprintf("%d %s %d %d %d %d %s", 
+	      p->pid, state, p->totalPageCount, (p->totalPageCount - p->psycPageCount), 
+	      p->pageFaultCounter, p->pagedOutCounter, p->name);
+    }
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -508,6 +548,8 @@ procdump(void)
     }
     cprintf("\n");
   }
+  printFreePagesPercentage();
+  //cprintf("%d free pages in system", getUsagePercentage());
 }
 
 

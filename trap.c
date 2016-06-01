@@ -85,8 +85,10 @@ trap(struct trapframe *tf)
     //use the %CR2 register t o determine the faulting address and identify the page
     va = (char*)rcr2();
     if (testFault(va)){
+      proc->pageFaultCounter++;
       if (proc->psycPageCount == 15)
       {//swap page into file only if all of the physical pages are allocated
+	proc->pagedOutCounter++;
 #ifdef FIFO
       move_page_to_file_by_fifo_policy(proc->pgdir);
 #endif

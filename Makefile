@@ -71,7 +71,13 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-CC = $(TOOLPREFIX)gcc -D $(SELECTION)
+VBP = VERBOSE_PRINT_FALSE
+
+ifeq ($(VERBOSE_PRINT),TRUE)
+	VBP = VERBOSE_PRINT_TRUE
+endif
+
+CC = $(TOOLPREFIX)gcc -D $(SELECTION) -D $(VBP)
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy

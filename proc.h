@@ -82,6 +82,8 @@ struct proc {
   
   short psycPageCount;
   short totalPageCount;
+  int pagedOutCounter;//counts how many times a page was swapped out into the disk
+  int pageFaultCounter;//counts how many times page fault occurred
   
   void * swapFileMapping[SWAP_FILE_MAPPING_SIZE];
   //each cell is referring to a page in the swap file and the value is the virtual address of the page that is mapped

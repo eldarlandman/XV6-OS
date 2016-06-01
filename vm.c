@@ -278,7 +278,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     }
     else if (proc->psycPageCount >= 15)
     {
-      
+      proc->pagedOutCounter++;
 #ifdef FIFO
       move_page_to_file_by_fifo_policy(pgdir);
 #endif
