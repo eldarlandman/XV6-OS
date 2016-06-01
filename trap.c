@@ -85,7 +85,16 @@ trap(struct trapframe *tf)
     //use the %CR2 register t o determine the faulting address and identify the page
     va = (char*)rcr2();
     if (testFault(va)){
+      if (proc->psycPageCount == 15)
+      {//swap page into file only if all of the physical pages are allocated
+#ifdef FIFO
       move_page_to_file_by_fifo_policy(proc->pgdir);
+#endif
+#ifdef NFU
+      move_page_to_file_by_NFU_policy(proc->pgdir);
+#endif
+      proc->psycPageCount--;
+      }
       read_page_from_file(va);
       break;
     }
@@ -115,7 +124,10 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(proc && proc->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER)
+  {
+    updateLRU();
     yield();
+  }
 
   // Check if the process has been killed since we yielded
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)

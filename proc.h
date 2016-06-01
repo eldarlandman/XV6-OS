@@ -83,11 +83,12 @@ struct proc {
   short psycPageCount;
   short totalPageCount;
   
-  void * swapFileMapping[16];
+  void * swapFileMapping[SWAP_FILE_MAPPING_SIZE];
   //each cell is referring to a page in the swap file and the value is the virtual address of the page that is mapped
-  int pageAge[30];
+  int pageAge[PAGE_AGE_SIZE];
   //each index represents a page starting in va i * page size
   //the value represents its reletive creation time: max{pageAge} + 1
+  int LRUAge[PAGE_AGE_SIZE];
 
 };
 

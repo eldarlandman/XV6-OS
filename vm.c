@@ -12,6 +12,9 @@ void applyNewAge(int);
 int findOldestPage(void);
 int findAvailableSwapPage(void);
 void write_to_file_by_fifo_policy(pde_t *, uint, uint, uint);
+int findLowestLRU(void);
+int applyDefaultAllocuvm(pde_t *, uint, uint);
+int applyDefaultDeallocuvm(pde_t *, uint, uint);
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -237,7 +240,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
-{//TODO consider additions
+{
   char *mem;
   uint a;
   struct proc * p = proc;
@@ -246,6 +249,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     return 0;
   if(newsz < oldsz)
     return oldsz;
+  
+#ifdef NONE
+  return applyDefaultAllocuvm(pgdir, oldsz, newsz);
+#endif
   
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE)
@@ -272,9 +279,12 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     else if (proc->psycPageCount >= 15)
     {
       
-      //#ifdef FIFO
+#ifdef FIFO
       move_page_to_file_by_fifo_policy(pgdir);
-      //#endif FIFO
+#endif
+#ifdef NFU
+      move_page_to_file_by_NFU_policy(pgdir);
+#endif
       
       mem = kalloc();
       if(mem == 0){
@@ -319,6 +329,31 @@ move_page_to_file_by_fifo_policy(pde_t *pgdir){
 }
 
 void
+move_page_to_file_by_NFU_policy(pde_t *pgdir){
+   struct proc *p = proc;
+  
+  int oldestPageIndex = findLowestLRU();
+  int availableSwapPageIndex = findAvailableSwapPage();
+  
+  //move physic page to file 
+  uint placeOnFile=availableSwapPageIndex*PGSIZE;			//calculate the offset of the available page in the file
+  char* buffer=(char*)(oldestPageIndex*PGSIZE);				//points the page which is swapped out to the disk
+  proc->swapFileMapping[availableSwapPageIndex] = buffer;	//update the mapping of virtual address to file offset
+  writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);			//write the swapped out page
+  pte_t *  pte_swapped_out = walkpgdir(pgdir, buffer, 0); 		//extract pte of the swapped out page
+  *pte_swapped_out = (*pte_swapped_out)&(~PTE_P); 			//turn-off present flag
+  *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); 			//turn-on paged out flag
+  
+  uint pa = PTE_ADDR(*pte_swapped_out);
+  kfree((char*)p2v(pa));
+  cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
+  //extract the PPN as physical address, convert to kernel virtual adress and free this page
+  p++;
+  
+}
+
+
+void
 read_page_from_file(char* va){
   struct proc * p = proc;
   int i;
@@ -344,10 +379,30 @@ read_page_from_file(char* va){
   mappages(proc->pgdir, (char*)groundedVa, PGSIZE, v2p(mem), PTE_W|PTE_U);	//map the page's virtual address to the physical address
   applyNewAge(groundedVa / PGSIZE);
   cprintf("read page: loaded %d located in file partition %d. total %d bytes\n", groundedVa / PGSIZE, i, read);
+  proc->psycPageCount++;
   p++;
 }
 
+int 
+applyDefaultAllocuvm(pde_t *pgdir, uint oldsz, uint newsz)
+{
+  char *mem;
+  uint a;
 
+  a = PGROUNDUP(oldsz);
+  for(; a < newsz; a += PGSIZE){
+    mem = kalloc();
+    if(mem == 0){
+      cprintf("allocuvm out of memory\n");
+      deallocuvm(pgdir, newsz, oldsz, proc);
+      return 0;
+    }
+    memset(mem, 0, PGSIZE);
+    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+  }
+  return newsz;
+
+}
 
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
@@ -355,9 +410,13 @@ read_page_from_file(char* va){
 // process size.  Returns the new process size.
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
-{//TODO what if the page is not present but written to file?
+{
   pte_t *pte;
   uint a, pa;
+  
+#ifdef NONE
+  return applyDefaultDeallocuvm(pgdir, oldsz, newsz);
+#endif
   
   if(newsz >= oldsz)
     return oldsz;
@@ -368,6 +427,11 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
     if(!pte)
       a += (NPTENTRIES - 1) * PGSIZE;
     else if((*pte & PTE_P) != 0){
+      if (p != (struct proc *)-1)
+      {
+	p->psycPageCount--;
+	p->totalPageCount--;
+      }
       pa = PTE_ADDR(*pte);
       if(pa == 0)
 	panic("kfree");
@@ -388,7 +452,10 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
 	}
       }
       if (p != (struct proc *)-1)
+      {
 	p->pageAge[a / PGSIZE] = 0;	//clear page age
+	p->totalPageCount--;
+      }
       *pte = (*pte & (~PTE_PG));		//clear the swapped out flag
       pa = PTE_ADDR(*pte);			//free the page
       if(pa == 0)
@@ -397,6 +464,31 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
       kfree(v);
       *pte = 0;
 
+    }
+  }
+  return newsz;
+}
+
+int applyDefaultDeallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
+{
+    pte_t *pte;
+  uint a, pa;
+
+  if(newsz >= oldsz)
+    return oldsz;
+
+  a = PGROUNDUP(newsz);
+  for(; a  < oldsz; a += PGSIZE){
+    pte = walkpgdir(pgdir, (char*)a, 0);
+    if(!pte)
+      a += (NPTENTRIES - 1) * PGSIZE;
+    else if((*pte & PTE_P) != 0){
+      pa = PTE_ADDR(*pte);
+      if(pa == 0)
+        panic("kfree");
+      char *v = p2v(pa);
+      kfree(v);
+      *pte = 0;
     }
   }
   return newsz;
@@ -568,6 +660,36 @@ int findOldestPage(void)
   return minPageIndex;
 }
 
+int findLowestLRU(void)
+{
+  struct proc * p = proc;
+  int i, minPage, minPageIndex;
+  for (i = 0; i < PAGE_AGE_SIZE; i++)
+  {//find the first page that present based on assumption that only present page's age > 0
+    if (proc->pageAge[i] > 0)
+    {//find the first non zero age
+      minPage = proc->LRUAge[i];
+      minPageIndex = i;
+      break;
+    }
+  }
+  p++;
+  p--;
+  for (; i < PAGE_AGE_SIZE; i++)
+  {//search for the smallest LRU
+    if (minPage > proc->LRUAge[i] && proc->pageAge[i] > 0)//make sure the page is present
+    {
+      minPage = proc->LRUAge[i];
+      minPageIndex = i;
+    }
+  }
+  proc->pageAge[minPageIndex] = 0;//signals that the paged swapped pte_swapped_out
+  proc->LRUAge[minPageIndex] = 0;//nullify LRU TODO is this safe?
+  p++;
+  return minPageIndex;
+}
+
+
 
 int findAvailableSwapPage(void)
 {
@@ -578,6 +700,23 @@ int findAvailableSwapPage(void)
       return i;
   }
   return i;
+}
+
+void updateLRU(void)
+{
+  int i;
+  pte_t *pte;
+  for (i = 0; i <MAX_TOTAL_PAGES; i++)
+  {
+      if((pte = walkpgdir(proc->pgdir, (void *) i, 0)) == 0) 
+	panic("copyuvm: pte should exist");
+      proc->LRUAge[i] = proc->LRUAge[i]>>1;
+      if (*pte & PTE_A)
+      {
+	proc->LRUAge[i] = proc->LRUAge[i] + 0x80000000;
+	*pte = *pte & (~PTE_A);
+      }
+  }
 }
 
 

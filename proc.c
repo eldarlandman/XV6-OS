@@ -47,7 +47,6 @@ allocproc(void)
   found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  //TODO consider placing CreateSwapFile() here + create swap file
   release(&ptable.lock);
   
   // Allocate kernel stack.
@@ -153,10 +152,9 @@ fork(void)
   for (i = 0; i < 30; i++)
   {
   np->pageAge[i] = proc->pageAge[i];
+  np->LRUAge[i] = proc->LRUAge[i];
   }
   
-  
-  //TODO make sure the file and the new fields are copied
   
   np->parent = proc;
   *np->tf = *proc->tf;
@@ -212,7 +210,6 @@ fork(void)
 void
 exit(void)
 {
-  //TODO cosider placing removeSwapFile here
   struct proc *p;
   struct proc * pp = proc;
   int fd;
@@ -521,11 +518,7 @@ void clearProcData(struct proc * p)
   int i;
   p->psycPageCount = 0;
   p->totalPageCount = 0;
-  //char buf[PGSIZE];
-  //for (i = 0; i <= PGSIZE; i++)
-  //buf[i] = 0;
-  //TODO the commented part writes 0s to the file and enters a dead/live lock. 
-  //it mighit not be nccessary since we write the whole pages and read only the mapped parts
+  //TODO consider writing 0s to the swapfile for when clearProcData is called by exec
   for (i = 0; i <= 16; i++)
   {
     p->swapFileMapping[i] = (void *)-1;

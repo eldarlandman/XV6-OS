@@ -63,6 +63,10 @@ exec(char *path, char **argv)
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
 
+  for (i = 0; i < sz / PGSIZE; i++)
+  {
+    proc->pageAge[i] = 0;
+  }
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)

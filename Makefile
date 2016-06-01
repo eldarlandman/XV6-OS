@@ -28,6 +28,8 @@ OBJS = \
 	vectors.o\
 	vm.o\
 
+	SELECTION = NFU
+	
 # Cross-compiling (e.g., on Mac OS X)
 # TOOLPREFIX = i386-jos-elf
 
@@ -69,7 +71,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-CC = $(TOOLPREFIX)gcc
+CC = $(TOOLPREFIX)gcc -D $(SELECTION)
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
