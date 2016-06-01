@@ -95,7 +95,12 @@ trap(struct trapframe *tf)
 #ifdef NFU
       move_page_to_file_by_NFU_policy(proc->pgdir);
 #endif
-      proc->psycPageCount--;
+#ifdef SCFIFO
+      move_page_to_file_by_scfifo_policy(proc->pgdir);
+#endif
+
+
+      proc->psycPageCount--;      
       }
       read_page_from_file(va);
       break;

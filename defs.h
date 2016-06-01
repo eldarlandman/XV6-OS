@@ -187,6 +187,7 @@ int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 void 		move_page_to_file_by_fifo_policy(pde_t* pgdir);
 void 		move_page_to_file_by_NFU_policy(pde_t* pgdir);
+void 		move_page_to_file_by_scfifo_policy(pde_t* pgdir);
 void		read_page_from_file(char* va);
 int		testFault(char *);
 void		updateLRU(void);

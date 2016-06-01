@@ -15,6 +15,7 @@ void write_to_file_by_fifo_policy(pde_t *, uint, uint, uint);
 int findLowestLRU(void);
 int applyDefaultAllocuvm(pde_t *, uint, uint);
 int applyDefaultDeallocuvm(pde_t *, uint, uint);
+int checkIfAllZero(void);
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -81,7 +82,7 @@ int testFault(char * va)
   if (proc)
     pte = walkpgdir(proc->pgdir, va ,0);
   if (pte && (*pte & PTE_PG) != 0){
-      return 1;
+    return 1;
   }
   return 0;
 }
@@ -259,23 +260,23 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   {
     if (proc->pid > 2 && a > MAX_TOTAL_PAGES * PGSIZE)
       panic("allocuvm: too many pages allocated");//if the process requests the 31th page it will cause a panic
-    if (proc->psycPageCount < 15 || proc->pid <= 2)
-      //the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
-      //init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
-    {
-      mem = kalloc();
-      if(mem == 0){
-	cprintf("allocuvm out of memory\n");
-	deallocuvm(pgdir, newsz, oldsz, proc);
-	return 0;
+      if (proc->psycPageCount < 15 || proc->pid <= 2)
+	//the constraint of 15 pages is not applied on init(pid 1) or sh(pid 2)
+	//init is the first process hence its pid is 1 and his first action is executing sh hence pid 2
+      {
+	mem = kalloc();
+	if(mem == 0){
+	  cprintf("allocuvm out of memory\n");
+	  deallocuvm(pgdir, newsz, oldsz, proc);
+	  return 0;
+	}
+	memset(mem, 0, PGSIZE);
+	mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+	//the growing proc has not passed his 15 pages limit
+	proc->psycPageCount++;
+	proc->totalPageCount++;
+	applyNewAge(a / PGSIZE);
       }
-      memset(mem, 0, PGSIZE);
-      mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
-      //the growing proc has not passed his 15 pages limit
-      proc->psycPageCount++;
-      proc->totalPageCount++;
-      applyNewAge(a / PGSIZE);
-    }
     else if (proc->psycPageCount >= 15)
     {
       proc->pagedOutCounter++;
@@ -285,20 +286,22 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 #ifdef NFU
       move_page_to_file_by_NFU_policy(pgdir);
 #endif
-      
+#ifdef SCFIFO
+      move_page_to_file_by_scfifo_policy(pgdir);
+#endif
+
       mem = kalloc();
       if(mem == 0){
 	cprintf("allocuvm out of memory\n");
 	deallocuvm(pgdir, newsz, oldsz, proc);
 	return 0;
       }
-      memset(mem, 0, PGSIZE);
-      mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
-      //the growing proc has not passed his 15 pages limit
-      proc->totalPageCount++;
-      applyNewAge(a / PGSIZE);
-      
-    }
+	memset(mem, 0, PGSIZE);
+	mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+	//the growing proc has not passed his 15 pages limit
+	proc->totalPageCount++;
+	applyNewAge(a / PGSIZE);
+      }
   }
   p++;
   return newsz;
@@ -306,7 +309,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
 void
 move_page_to_file_by_fifo_policy(pde_t *pgdir){
-   struct proc *p = proc;
+  struct proc *p = proc;
   
   int oldestPageIndex = findOldestPage();
   int availableSwapPageIndex = findAvailableSwapPage();
@@ -314,14 +317,14 @@ move_page_to_file_by_fifo_policy(pde_t *pgdir){
   //move physic page to file 
   uint placeOnFile=availableSwapPageIndex*PGSIZE;			//calculate the offset of the available page in the file
   char* buffer=(char*)(oldestPageIndex*PGSIZE);				//points the page which is swapped out to the disk
-  proc->swapFileMapping[availableSwapPageIndex] = buffer;	//update the mapping of virtual address to file offset
+  proc->swapFileMapping[availableSwapPageIndex] = buffer;	//update the mapping array
   writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);			//write the swapped out page
   pte_t *  pte_swapped_out = walkpgdir(pgdir, buffer, 0); 		//extract pte of the swapped out page
   *pte_swapped_out = (*pte_swapped_out)&(~PTE_P); 			//turn-off present flag
   *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); 			//turn-on paged out flag
   
   uint pa = PTE_ADDR(*pte_swapped_out);
-  kfree((char*)p2v(pa));
+  kfree((char*)p2v(pa));									//release physic page from RAM
   cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
   p++;
@@ -349,9 +352,66 @@ move_page_to_file_by_NFU_policy(pde_t *pgdir){
   cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
   p++;
-  
 }
 
+void
+move_page_to_file_by_scfifo_policy(pde_t *pgdir){
+  struct proc* p=proc;
+  int i;
+  int backUpPageAge[30];
+  
+  for (i=0; i<30; i++){ //back up the pageAge  
+    backUpPageAge[i]=proc->pageAge[i];
+  }
+  
+  int availableSwapPageIndex = findAvailableSwapPage();
+  uint placeOnFile=availableSwapPageIndex*PGSIZE;			//calculate the offset of the available page in the file
+  int oldestPageIndex, notAccessed=1;
+  
+  char* buffer;
+  pte_t *  pteToCheck;
+  
+  
+  while(notAccessed){
+    if (checkIfAllZero()){ //all pages were accessed-->retrieve the original PageAge and check again      
+      for (i=0; i<30; i++){ 
+	proc->pageAge[i]=backUpPageAge[i];
+      }      
+    }
+    oldestPageIndex=findOldestPage();
+    buffer=(char*)(oldestPageIndex*PGSIZE);
+    pteToCheck= walkpgdir(pgdir, buffer, 0);         
+    
+    
+    
+    if (!(*pteToCheck&PTE_A)){//if PTE_A is off , the page wasnt accessed recently-->retrieve pageAge, update oldestPageIndex and SWAP it!
+      
+      for (i=0; i<30; i++){ 
+	proc->pageAge[i]=backUpPageAge[i];
+      }
+      proc->pageAge[oldestPageIndex]=0;
+      
+      proc->swapFileMapping[availableSwapPageIndex] = buffer;	//update the mapping array
+      writeToSwapFile(proc,buffer, placeOnFile,PGSIZE);			//write the swapped out page  
+      //the next lines update PTE flags and release page from RAM      
+      *pteToCheck = (*pteToCheck)&(~PTE_P); 			//turn-off present flag
+      *pteToCheck = (*pteToCheck)|(PTE_PG); 			//turn-on paged out flag
+      uint pa = PTE_ADDR(*pteToCheck);
+      kfree((char*)p2v(pa));
+      
+    break;	
+    }
+    else{//if PTE_A is on , turn it off ; , "remove" it from the array  and keep looking for the next page by fifo
+      *pteToCheck=(*pteToCheck)&(~PTE_A);
+      proc->pageAge[oldestPageIndex]=0;
+    }
+  
+    
+  }
+  
+  
+  p++;
+}
 
 void
 read_page_from_file(char* va){
@@ -429,6 +489,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
     else if((*pte & PTE_P) != 0){
       if (p != (struct proc *)-1)
       {
+	p->pageAge[a / PGSIZE] = 0;
 	p->psycPageCount--;
 	p->totalPageCount--;
       }
@@ -463,7 +524,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz, struct proc * p)
       char *v = p2v(pa);
       kfree(v);
       *pte = 0;
-
+      
     }
   }
   return newsz;
@@ -556,11 +617,11 @@ copyuvm(pde_t *pgdir, uint sz)
     }
     else if (!(*pte & PTE_P) && (*pte & PTE_PG)) //case 3: page is not on RAM but swapped out
     {
-	if((npte = walkpgdir(d, (void*)i, 1)) == 0) //hence, no need for allocating new page just copy the flags
-	  goto bad;
-	if(*npte & PTE_P)
-	  panic("remap");
-	*npte = (*pte);
+      if((npte = walkpgdir(d, (void*)i, 1)) == 0) //hence, no need for allocating new page just copy the flags
+	goto bad;
+      if(*npte & PTE_P)
+	panic("remap");
+      *npte = (*pte);
     }
   }
   return d;
@@ -691,6 +752,7 @@ int findLowestLRU(void)
 
 
 
+
 int findAvailableSwapPage(void)
 {
   int i;
@@ -720,3 +782,10 @@ void updateLRU(void)
 }
 
 
+int checkIfAllZero(){
+  int i;
+  for (i=0; i<30; i++){
+    if (proc->pageAge[i])  {return 0;}
+  }
+  return 1;
+}
