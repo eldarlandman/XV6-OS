@@ -324,8 +324,8 @@ move_page_to_file_by_fifo_policy(pde_t *pgdir){
   *pte_swapped_out = (*pte_swapped_out)|(PTE_PG); 			//turn-on paged out flag
   
   uint pa = PTE_ADDR(*pte_swapped_out);
-  kfree((char*)p2v(pa));									//release physic page from RAM
-  cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
+  kfree((char*)p2v(pa));
+  //cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
   p++;
   
@@ -349,7 +349,7 @@ move_page_to_file_by_NFU_policy(pde_t *pgdir){
   
   uint pa = PTE_ADDR(*pte_swapped_out);
   kfree((char*)p2v(pa));
-  cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
+ // cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   //extract the PPN as physical address, convert to kernel virtual adress and free this page
   p++;
 }
@@ -409,7 +409,7 @@ move_page_to_file_by_scfifo_policy(pde_t *pgdir){
     
   }
   
-  
+  //cprintf("move page: swapped %d into %d in file\n", oldestPageIndex, availableSwapPageIndex);
   p++;
 }
 
@@ -435,10 +435,10 @@ read_page_from_file(char* va){
     panic("memory allocation failed");
     return;
   }
-  int read = readFromSwapFile(proc, mem, i * PGSIZE, PGSIZE);	//read from file to the newly allocated page
+  readFromSwapFile(proc, mem, i * PGSIZE, PGSIZE);	//read from file to the newly allocated page
   mappages(proc->pgdir, (char*)groundedVa, PGSIZE, v2p(mem), PTE_W|PTE_U);	//map the page's virtual address to the physical address
   applyNewAge(groundedVa / PGSIZE);
-  cprintf("read page: loaded %d located in file partition %d. total %d bytes\n", groundedVa / PGSIZE, i, read);
+  //cprintf("read page: loaded %d located in file partition %d. total %d bytes\n", groundedVa / PGSIZE, i, read);
   proc->psycPageCount++;
   p++;
 }
@@ -724,7 +724,7 @@ int findOldestPage(void)
 int findLowestLRU(void)
 {
   struct proc * p = proc;
-  int i, minPage, minPageIndex;
+  uint i, minPage, minPageIndex;
   for (i = 0; i < PAGE_AGE_SIZE; i++)
   {//find the first page that present based on assumption that only present page's age > 0
     if (proc->pageAge[i] > 0)
@@ -744,6 +744,7 @@ int findLowestLRU(void)
       minPageIndex = i;
     }
   }
+  //cprintf("LRU %d\n", minPage);
   proc->pageAge[minPageIndex] = 0;//signals that the paged swapped pte_swapped_out
   proc->LRUAge[minPageIndex] = 0;//nullify LRU TODO is this safe?
   p++;
@@ -770,7 +771,7 @@ void updateLRU(void)
   pte_t *pte;
   for (i = 0; i <MAX_TOTAL_PAGES; i++)
   {
-      if((pte = walkpgdir(proc->pgdir, (void *) i, 0)) == 0) 
+      if((pte = walkpgdir(proc->pgdir, (void *) (i * PGSIZE), 0)) == 0) 
 	panic("copyuvm: pte should exist");
       proc->LRUAge[i] = proc->LRUAge[i]>>1;
       if (*pte & PTE_A)

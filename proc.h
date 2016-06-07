@@ -90,7 +90,7 @@ struct proc {
   int pageAge[PAGE_AGE_SIZE];
   //each index represents a page starting in va i * page size
   //the value represents its reletive creation time: max{pageAge} + 1
-  int LRUAge[PAGE_AGE_SIZE];
+  uint LRUAge[PAGE_AGE_SIZE];
 
 };
 
