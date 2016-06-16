@@ -162,7 +162,7 @@ bad:
 }
 
 // Is the directory dp empty except for "." and ".." ?
-int
+static int
 isdirempty(struct inode *dp)
 {
   int off;
@@ -235,7 +235,7 @@ bad:
   return -1;
 }
 
-struct inode*
+static struct inode*
 create(char *path, short type, short major, short minor)
 {
   uint off;

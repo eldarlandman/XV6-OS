@@ -1,16 +1,6 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 
-//___________________OUR CHANGES___________________//
-
-#define MAX_PSYC_PAGES 15
-#define MAX_TOTAL_PAGES 30
-#define SWAP_FILE_MAPPING_SIZE 16
-#define PAGE_AGE_SIZE 30
-
-
-//___________________/OUR CHANGES___________________//
-
 // Per-CPU state
 struct cpu {
   uchar id;                    // Local APIC ID; index into cpus[] below
@@ -59,7 +49,7 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, M_UNUSED };
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
@@ -76,22 +66,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
-  //Swap file. must initiate with create swap file
-  struct file *swapFile;			//page file
-  
-  short psycPageCount;
-  short totalPageCount;
-  int pagedOutCounter;//counts how many times a page was swapped out into the disk
-  int pageFaultCounter;//counts how many times page fault occurred
-  
-  void * swapFileMapping[SWAP_FILE_MAPPING_SIZE];
-  //each cell is referring to a page in the swap file and the value is the virtual address of the page that is mapped
-  int pageAge[PAGE_AGE_SIZE];
-  //each index represents a page starting in va i * page size
-  //the value represents its reletive creation time: max{pageAge} + 1
-  uint LRUAge[PAGE_AGE_SIZE];
-
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -99,5 +73,3 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
-
-void clearProcData(struct proc *);//clear all proc's data

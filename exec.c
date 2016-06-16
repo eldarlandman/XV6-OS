@@ -36,8 +36,6 @@ exec(char *path, char **argv)
     goto bad;
 
   // Load program into memory.
-  clearProcData(proc);
-  
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
@@ -63,10 +61,6 @@ exec(char *path, char **argv)
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
 
-  for (i = 0; i < sz / PGSIZE; i++)
-  {
-    proc->pageAge[i] = 0;
-  }
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
@@ -99,12 +93,12 @@ exec(char *path, char **argv)
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
   switchuvm(proc);
-  freevm(oldpgdir, (struct proc *)-1);
+  freevm(oldpgdir);
   return 0;
 
  bad:
   if(pgdir)
-    freevm(pgdir, proc);
+    freevm(pgdir);
   if(ip){
     iunlockput(ip);
     end_op();

@@ -28,8 +28,6 @@ OBJS = \
 	vectors.o\
 	vm.o\
 
-	SELECTION = NFU
-	
 # Cross-compiling (e.g., on Mac OS X)
 # TOOLPREFIX = i386-jos-elf
 
@@ -71,13 +69,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-VBP = VERBOSE_PRINT_FALSE
-
-ifeq ($(VERBOSE_PRINT),TRUE)
-	VBP = VERBOSE_PRINT_TRUE
-endif
-
-CC = $(TOOLPREFIX)gcc -D $(SELECTION) -D $(VBP)
+CC = $(TOOLPREFIX)gcc
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
@@ -180,7 +172,6 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
-	_myMemTest\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -248,7 +239,7 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 # check in that version.
 
 EXTRA=\
-	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c _myMemTest.c\
+	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
 	printf.c umalloc.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\

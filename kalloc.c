@@ -20,8 +20,6 @@ struct {
   struct spinlock lock;
   int use_lock;
   struct run *freelist;
-  int totalPages;
-  int usedPages;
 } kmem;
 
 // Initialization happens in two phases.
@@ -40,14 +38,6 @@ kinit1(void *vstart, void *vend)
 void
 kinit2(void *vstart, void *vend)
 {
-  //calculate the total pages field in kmem.
-  //in kinit2 all of the pages are allocated(we dont count the pages in kinit1 since those are for the kernel)
-  uint roundedStart, roundedEnd; 				//mimic the freerange function 
-  roundedStart = PGROUNDUP((uint)vstart);		//round up vstart just like freerange
-  roundedEnd = PGROUNDDOWN((uint)vend);	//round down just like the for loop in freerange implies
-  kmem.totalPages = (roundedEnd - roundedStart) / PGSIZE;		//devide the total address space 
-  kmem.usedPages = 0;
-  ////////////////////////
   freerange(vstart, vend);
   kmem.use_lock = 1;
 }
@@ -81,8 +71,6 @@ kfree(char *v)
     acquire(&kmem.lock);
   r = (struct run*)v;
   r->next = kmem.freelist;
-  if (kmem.usedPages > 0)
-    kmem.usedPages--;
   kmem.freelist = r;
   if(kmem.use_lock)
     release(&kmem.lock);
@@ -101,15 +89,8 @@ kalloc(void)
   r = kmem.freelist;
   if(r)
     kmem.freelist = r->next;
-    kmem.usedPages++;
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;
-}
-
-void
-printFreePagesPercentage(void)
-{
-  cprintf("%d\% free pages in the system\n", ((100 * ((kmem.totalPages) - (kmem.usedPages))) / (kmem.totalPages)));
 }
 

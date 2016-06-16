@@ -36,8 +36,6 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
-  struct proc * p = proc;
-  char * va;
   if(tf->trapno == T_SYSCALL){
     if(proc->killed)
       exit();
@@ -79,32 +77,6 @@ trap(struct trapframe *tf)
             cpu->id, tf->cs, tf->eip);
     lapiceoi();
     break;
-    
-  case T_PGFLT:
-    //the processor fails to access the required page, it generates a trap (interrupt 14, T_PGFLT). 
-    //use the %CR2 register t o determine the faulting address and identify the page
-    va = (char*)rcr2();
-    if (testFault(va)){
-      proc->pageFaultCounter++;
-      if (proc->psycPageCount == 15)
-      {//swap page into file only if all of the physical pages are allocated
-	proc->pagedOutCounter++;
-#ifdef FIFO
-      move_page_to_file_by_fifo_policy(proc->pgdir);
-#endif
-#ifdef NFU
-      move_page_to_file_by_NFU_policy(proc->pgdir);
-#endif
-#ifdef SCFIFO
-      move_page_to_file_by_scfifo_policy(proc->pgdir);
-#endif
-
-
-      proc->psycPageCount--;      
-      }
-      read_page_from_file(va);
-      break;
-    }
    
   //PAGEBREAK: 13
   default:
@@ -131,15 +103,9 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(proc && proc->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER)
-  {
-    //cprintf("tick\n");
-    updateLRU();
     yield();
-  }
 
   // Check if the process has been killed since we yielded
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)
     exit();
-  
-  p++;
 }

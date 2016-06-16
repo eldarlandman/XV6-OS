@@ -109,10 +109,16 @@ main(int argc, char *argv[])
 
   for(i = 0; i < FSSIZE; i++)
     wsect(i, zeroes);
-
-  memset(buf, 0, sizeof(buf));
-  memmove(buf, &sb, sizeof(sb));
-  wsect(1, buf);
+  
+  
+  /*memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
+  struct 
+  memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
+  wsect(1, buf);					//write the buffer(super block) into the first block
+*/
+  memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
+  memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
+  wsect(1, buf);					//write the buffer(super block) into the first block
 
   rootino = ialloc(T_DIR);
   assert(rootino == ROOTINO);
