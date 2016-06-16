@@ -26,7 +26,7 @@ int main(void)
     }
     sbrk(PAGE_SIZE);
     *((char*)(i * PAGE_SIZE)) = *((char*)(i * PAGE_SIZE)) + 1;
-    c = *((char*)(i * PAGE_SIZE));s
+    c = *((char*)(i * PAGE_SIZE));
     i = i + 1;
   }
   c++;
