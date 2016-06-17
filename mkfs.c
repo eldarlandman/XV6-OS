@@ -11,6 +11,8 @@
 #include "stat.h"
 #include "param.h"
 
+#include "mbr.h"	//gal: including the header and struct of master boot record
+
 #ifndef static_assert
 #define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif
@@ -25,6 +27,8 @@ int ninodeblocks = NINODES / IPB + 1;
 int nlog = LOGSIZE;  
 int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
 int nblocks;  // Number of data blocks
+
+int partition0Offset = 1;	//gal: block 0 is MBR so block 1(super block) is partition 0 beginning ==> the offest is 1
 
 int fsfd;
 struct superblock sb;
@@ -91,16 +95,17 @@ main(int argc, char *argv[])
   }
 
   // 1 fs block = 1 disk sector
-  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+  nmeta = partition0Offset + 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
   nblocks = FSSIZE - nmeta;
+  
 
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(NINODES);
   sb.nlog = xint(nlog);
-  sb.logstart = xint(2);
-  sb.inodestart = xint(2+nlog);
-  sb.bmapstart = xint(2+nlog+ninodeblocks);
+  sb.logstart = xint(partition0Offset + 1);	//gal: log starts from the partition offest + 1 block for super block
+  sb.inodestart = xint(partition0Offset + 1 + nlog);
+  sb.bmapstart = xint(partition0Offset + 1 + nlog + ninodeblocks);
 
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
          nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
@@ -111,14 +116,25 @@ main(int argc, char *argv[])
     wsect(i, zeroes);
   
   
-  /*memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
-  struct 
-  memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
-  wsect(1, buf);					//write the buffer(super block) into the first block
-*/
+  memset(buf, 0, sizeof(buf));					//gal: nullify buf: a buffer the size of a block allocated on the stack
+  struct mbr newMbr;						//allocate mbr struct on the stack
+  memset(newMbr.bootstrap, 0, BOOTSTRAP);	//nullify the bootstrap TODO consider removal, for some reason when this was allocated it was filled with junk
+  
+  for (i = 0; i < 4; i++)
+  {
+      newMbr.partitions[i].type = FS_INODE;
+      newMbr.partitions[i].offset = partition0Offset + (FSSIZE * i);				//partition 0 starts from block 1
+      newMbr.partitions[i].size = FSSIZE;			//partition 0 size is FSSIZE = 1000 block
+      newMbr.partitions[i].flags = 0;
+  }
+  newMbr.partitions[0].flags = PART_ALLOCATED | PART_BOOTABLE; //set partition 0 to be bootable and allocated. 
+  
+  memmove(buf, &newMbr, sizeof(newMbr));		//copy the super block into the allocated buffer
+  wsect(0, buf);								//write the buffer(mbr) into the first block
+
   memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
   memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
-  wsect(1, buf);					//write the buffer(super block) into the first block
+  wsect(partition0Offset, buf);					//write the buffer(super block) into the first block
 
   rootino = ialloc(T_DIR);
   assert(rootino == ROOTINO);

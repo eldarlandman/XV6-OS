@@ -20,17 +20,61 @@
 #include "buf.h"
 #include "file.h"
 
+#include "mbr.h"	//gal: load mbr header for sturct mbr that is used in readmbr()
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
-struct superblock sb;   // there should be one per dev, but we run with one dev
+struct superblock sb;   	// there should be one per dev, but we run with one dev
+struct mbr * mbrPtr;		//points the mbr
+
+
+struct mbr *//loads the MBR from ROOTDEV
+loadMbrFromDisk(void)
+{
+  struct buf *buffer = bread(ROOTDEV, 0);
+  mbrPtr = (struct mbr *)&(buffer->data);
+  return mbrPtr;
+}
+
+struct mbr *//loads the MBR and prints the partitions details
+readmbr(void)
+{
+  int i;
+  char* bootable;
+  char* type;
+
+  mbrPtr = loadMbrFromDisk();
+  for (i = 0; i < 4; i++)
+  {
+    if (mbrPtr->partitions[i].flags & PART_BOOTABLE)
+      bootable = "YES";
+    else
+      bootable = "NO";
+    
+    if (mbrPtr->partitions[i].type == FS_INODE)
+      type = "INODE";
+    else if (mbrPtr->partitions[i].type == FS_FAT)
+      type = "FAT";
+    else
+      type = "unknown type";
+    cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
+	    i, 
+	    bootable, 
+	    type, 
+	    (uint)mbrPtr->partitions[i].offset, 
+	    (uint)mbrPtr->partitions[i].size);
+  }
+  return mbrPtr;
+}
 
 // Read the super block.
 void
-readsb(int dev, struct superblock *sb)
+readsb(int dev, struct superblock *sb, int partitionNum)
 {
   struct buf *bp;
-  
-  bp = bread(dev, 1);
+  mbrPtr = loadMbrFromDisk();
+  int superBlockLocation = mbrPtr->partitions[partitionNum].offset;
+  bp = bread(dev, superBlockLocation);
   memmove(sb, bp->data, sizeof(*sb));
   brelse(bp);
 }
@@ -81,7 +125,7 @@ bfree(int dev, uint b)
   struct buf *bp;
   int bi, m;
 
-  readsb(dev, &sb);
+  readsb(dev, &sb, partitionNum);
   bp = bread(dev, BBLOCK(b, sb));
   bi = b % BPB;
   m = 1 << (bi % 8);
@@ -162,8 +206,18 @@ struct {
 void
 iinit(int dev)
 {
+  int i, superBlockLocation;
   initlock(&icache.lock, "icache");
-  readsb(dev, &sb);
+  struct mbr * loadedMbr = readmbr();
+  for (i = 0; i < 4; i++)
+  {
+    if (loadedMbr->partitions[i].flags & & PART_BOOTABLE)
+    {
+      superBlockLocation = loadedMbr->partitions[i].offset;
+      break;
+    }
+  }
+  readsb(dev, &sb, superBlockLocation);
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
 }
