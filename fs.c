@@ -25,15 +25,16 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
 struct superblock sb;   	// there should be one per dev, but we run with one dev
-struct mbr * mbrPtr;		//points the mbr
+struct mbr  loadedMbr;		//points the mbr
 
 
 struct mbr *//loads the MBR from ROOTDEV
 loadMbrFromDisk(void)
 {
   struct buf *buffer = bread(ROOTDEV, 0);
-  mbrPtr = (struct mbr *)&(buffer->data);
-  return mbrPtr;
+  memmove((void*)&loadedMbr, buffer->data, sizeof(struct mbr));
+  brelse(buffer);
+  return &loadedMbr;
 }
 
 struct mbr *//loads the MBR and prints the partitions details
@@ -43,7 +44,7 @@ readmbr(void)
   char* bootable;
   char* type;
 
-  mbrPtr = loadMbrFromDisk();
+  struct mbr * mbrPtr = loadMbrFromDisk();
   for (i = 0; i < 4; i++)
   {
     if (mbrPtr->partitions[i].flags & PART_BOOTABLE)
@@ -72,10 +73,12 @@ void
 readsb(int dev, struct superblock *sb, int partitionNum)
 {
   struct buf *bp;
-  mbrPtr = loadMbrFromDisk();
-  int superBlockLocation = mbrPtr->partitions[partitionNum].offset;
+  //struct mbr * mbrPtr = loadMbrFromDisk();
+  //int superBlockLocation = mbrPtr->partitions[partitionNum].offset;	//task3: we will not read block 1 but the first block of the requested partition
+  int superBlockLocation = loadedMbr.partitions[partitionNum].offset;//TODO if works stay that way (static global mbr the we read only once)
   bp = bread(dev, superBlockLocation);
   memmove(sb, bp->data, sizeof(*sb));
+  sb->partitionNumber = partitionNum;
   brelse(bp);
 }
 
@@ -84,7 +87,7 @@ static void
 bzero(int dev, int bno)
 {
   struct buf *bp;
-  
+  APPLY_P_OFFSET(bno);//shift the bno according to the root directory partition
   bp = bread(dev, bno);
   memset(bp->data, 0, BSIZE);
   log_write(bp);
@@ -98,18 +101,23 @@ static uint
 balloc(uint dev)
 {
   int b, bi, m;
+  uint bno;
   struct buf *bp;
 
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
+    bno = BBLOCK(b, sb);
+    APPLY_P_OFFSET(bno);
+    bp = bread(dev, bno);
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
         brelse(bp);
-        bzero(dev, b + bi);
+	bno = b + bi;
+	APPLY_P_OFFSET(bno);
+        bzero(dev, bno);
         return b + bi;
       }
     }
@@ -120,13 +128,16 @@ balloc(uint dev)
 
 // Free a disk block.
 static void
-bfree(int dev, uint b)
+bfree(int dev, uint b, int partitionNum)
 {
   struct buf *bp;
+  uint bno;
   int bi, m;
 
   readsb(dev, &sb, partitionNum);
-  bp = bread(dev, BBLOCK(b, sb));
+  bno = BBLOCK(b, sb);
+  APPLY_P_OFFSET(bno);
+  bp = bread(dev, bno);
   bi = b % BPB;
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
@@ -206,18 +217,18 @@ struct {
 void
 iinit(int dev)
 {
-  int i, superBlockLocation;
+  int partitionIndex;
   initlock(&icache.lock, "icache");
   struct mbr * loadedMbr = readmbr();
-  for (i = 0; i < 4; i++)
+  for (partitionIndex = 0; partitionIndex < 4; partitionIndex++)
   {
-    if (loadedMbr->partitions[i].flags & & PART_BOOTABLE)
+    if (loadedMbr->partitions[partitionIndex].flags &  PART_BOOTABLE)
     {
-      superBlockLocation = loadedMbr->partitions[i].offset;
+      
       break;
     }
   }
-  readsb(dev, &sb, superBlockLocation);
+  readsb(dev, &sb, partitionIndex);
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
 }
@@ -451,7 +462,7 @@ itrunc(struct inode *ip)
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
-      bfree(ip->dev, ip->addrs[i]);
+      bfree(ip->dev, ip->addrs[i], ip->partitionNum);
       ip->addrs[i] = 0;
     }
   }
@@ -461,10 +472,10 @@ itrunc(struct inode *ip)
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
-        bfree(ip->dev, a[j]);
+        bfree(ip->dev, a[j], ip->partitionNum);
     }
     brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
+    bfree(ip->dev, ip->addrs[NDIRECT], ip->partitionNum);
     ip->addrs[NDIRECT] = 0;
   }
 

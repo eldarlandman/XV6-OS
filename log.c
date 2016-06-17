@@ -42,7 +42,8 @@ struct log {
   int outstanding; // how many FS sys calls are executing.
   int committing;  // in commit(), please wait.
   int dev;
-  struct logheader lh;
+  int partitionNum; //TODO initilize required
+  struct logheader lh; 
 };
 struct log log;
 
@@ -57,7 +58,7 @@ initlog(int dev)
 
   struct superblock sb;
   initlock(&log.lock, "log");
-  readsb(dev, &sb);
+  readsb(dev, &sb,log.partitionNum);
   log.start = sb.logstart;
   log.size = sb.nlog;
   log.dev = dev;

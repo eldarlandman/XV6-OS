@@ -98,15 +98,15 @@ main(int argc, char *argv[])
   nmeta = partition0Offset + 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
   nblocks = FSSIZE - nmeta;
   
-
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(NINODES);
   sb.nlog = xint(nlog);
-  sb.logstart = xint(partition0Offset + 1);	//gal: log starts from the partition offest + 1 block for super block
-  sb.inodestart = xint(partition0Offset + 1 + nlog);
-  sb.bmapstart = xint(partition0Offset + 1 + nlog + ninodeblocks);
-
+  sb.logstart = xint(1);	//gal: log starts from the partition offest + 1 block for super block
+  sb.inodestart = xint(1 + nlog);
+  sb.bmapstart = xint(1 + nlog + ninodeblocks);
+  sb.partitionNumber = 0;	//the root partition is partition 0
+  
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
          nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
 

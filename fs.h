@@ -10,7 +10,7 @@
 //
 // mkfs computes the super block and builds an initial file system. The super describes
 // the disk layout:
-struct superblock {
+struct superblock {//TODO should we add partiotion number?
   uint size;         // Size of file system image (blocks)
   uint nblocks;      // Number of data blocks
   uint ninodes;      // Number of inodes.
@@ -18,6 +18,8 @@ struct superblock {
   uint logstart;     // Block number of first log block
   uint inodestart;   // Block number of first inode block
   uint bmapstart;    // Block number of first free map block
+  
+  uint partitionNumber;//the partition number of the partition this uper block maps
 };
 
 #define NDIRECT 12
@@ -25,7 +27,7 @@ struct superblock {
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 // On-disk inode structure
-struct dinode {
+struct dinode {//TODO consider adding partition number
   short type;           // File type
   short major;          // Major device number (T_DEV only)
   short minor;          // Minor device number (T_DEV only)
@@ -45,6 +47,9 @@ struct dinode {
 
 // Block of free map containing bit for block b
 #define BBLOCK(b, sb) (b/BPB + sb.bmapstart)
+
+//apply the offset of a partition on a block number, based on mbr + sb
+#define APPLY_P_OFFSET(bno) (bno = bno + loadedMbr.partitions[sb.partitionNumber].offset)
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
