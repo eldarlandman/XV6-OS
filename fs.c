@@ -26,7 +26,7 @@
 static void itrunc(struct inode*);
 struct superblock sb;   	// there should be one per dev, but we run with one dev
 struct mbr  loadedMbr;		//points the mbr
-
+int partitionBootNum;
 
 struct mbr *//loads the MBR from ROOTDEV
 loadMbrFromDisk(void)
@@ -226,6 +226,7 @@ iinit(int dev)
   {//TODO maybe we should check what partition is bootable
     if (loadedMbr->partitions[partitionIndex].flags &  PART_BOOTABLE)
     {
+      partitionBootNum=partitionIndex;
       break;
     }
   }
@@ -691,15 +692,16 @@ namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
 
-  if(*path == '/')
-    ip = iget(ROOTDEV, ROOTINO);//TODO partition number is the root partition
-  else
+  if(*path == '/') //absoloute
+    ip = iget(ROOTDEV, ROOTINO, partitionBootNum);
+  else //relative
     ip = idup(proc->cwd);
 
+  //from here all functions use ip  - relevant to its partition 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
     if(ip->type != T_DIR){
-      iunlockput(ip);
+      iunlockput(ip); //TODO theres no reference to relative/absoloute in iunlockput
       return 0;
     }
     if(nameiparent && *path == '\0'){
@@ -731,5 +733,6 @@ namei(char *path)
 struct inode*
 nameiparent(char *path, char *name)
 {
+  
   return namex(path, 1, name);
 }
