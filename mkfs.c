@@ -28,7 +28,7 @@ int nlog = LOGSIZE;
 int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
 int nblocks;  // Number of data blocks
 
-int partition0Offset = 1;	//gal: block 0 is MBR so block 1(super block) is partition 0 beginning ==> the offest is 1
+int partitionOffsets[4];	//gal: block 0 is MBR so block 1(super block) is partition 0 beginning ==> the offest is 1
 
 int fsfd;
 struct superblock sb;
@@ -76,7 +76,11 @@ main(int argc, char *argv[])
   struct dirent de;
   char buf[BSIZE];
   struct dinode din;
-
+  
+  for (i = 0; i < 4; i++)//set the partitions offsets for future use
+  {
+    partitionOffsets[i] = 1 + (PART_SIZE * i);
+  }
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
@@ -95,10 +99,10 @@ main(int argc, char *argv[])
   }
 
   // 1 fs block = 1 disk sector
-  nmeta = partition0Offset + 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
-  nblocks = FSSIZE - nmeta;
+  nmeta = partitionOffsets[0] + 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
+  nblocks = PART_SIZE - nmeta;
   
-  sb.size = xint(FSSIZE);
+  sb.size = xint(PART_SIZE);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(NINODES);
   sb.nlog = xint(nlog);
@@ -123,8 +127,8 @@ main(int argc, char *argv[])
   for (i = 0; i < 4; i++)
   {
       newMbr.partitions[i].type = FS_INODE;
-      newMbr.partitions[i].offset = partition0Offset + (FSSIZE * i);				//partition 0 starts from block 1
-      newMbr.partitions[i].size = FSSIZE;			//partition 0 size is FSSIZE = 1000 block
+      newMbr.partitions[i].offset = partitionOffsets[i];				//partition 0 starts from block 1
+      newMbr.partitions[i].size = PART_SIZE;			//partition 0 size is FSSIZE = 1000 block
       newMbr.partitions[i].flags = 0;
   }
   newMbr.partitions[0].flags = PART_ALLOCATED | PART_BOOTABLE; //set partition 0 to be bootable and allocated. 
@@ -134,10 +138,10 @@ main(int argc, char *argv[])
 
   memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
   memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
-  wsect(partition0Offset, buf);					//write the buffer(super block) into the first block
+  wsect(partitionOffsets[0], buf);					//write the buffer(super block) into the first block
 
   rootino = ialloc(T_DIR);
-  assert(rootino == ROOTINO);
+  assert(rootino == ROOTINO);//TODO might not pass with more than one partition
 
   bzero(&de, sizeof(de));
   de.inum = xshort(rootino);
@@ -189,8 +193,8 @@ main(int argc, char *argv[])
   exit(0);
 }
 
-void
-wsect(uint sec, void *buf)
+void						//No Need For a Change
+wsect(uint sec, void *buf)//task3: NNFC - it gets a specific block to write to when the partition offset is already applied
 {
   if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
     perror("lseek");
@@ -206,31 +210,33 @@ void
 winode(uint inum, struct dinode *ip)
 {
   char buf[BSIZE];
-  uint bn;
+  uint bn, bnPlusPartOffset;
   struct dinode *dip;
 
   bn = IBLOCK(inum, sb);
-  rsect(bn, buf);
+  bnPlusPartOffset = bn + partitionOffsets[sb.partitionNumber];
+  rsect(bnPlusPartOffset, buf);
   dip = ((struct dinode*)buf) + (inum % IPB);
   *dip = *ip;
-  wsect(bn, buf);
+  wsect(bnPlusPartOffset, buf);
 }
 
 void
 rinode(uint inum, struct dinode *ip)
 {
   char buf[BSIZE];
-  uint bn;
+  uint bn, bnPlusPartOffset;
   struct dinode *dip;
 
   bn = IBLOCK(inum, sb);
-  rsect(bn, buf);
+  bnPlusPartOffset = bn + partitionOffsets[sb.partitionNumber];
+  rsect(bnPlusPartOffset, buf);
   dip = ((struct dinode*)buf) + (inum % IPB);
   *ip = *dip;
 }
 
 void
-rsect(uint sec, void *buf)
+rsect(uint sec, void *buf)//task3: NNFC - it gets a specific block to write to when the partition offset is already applied
 {
   if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
     perror("lseek");
@@ -261,6 +267,7 @@ balloc(int used)
 {
   uchar buf[BSIZE];
   int i;
+  uint bmapstartPlusPartOffset;
 
   printf("balloc: first %d blocks have been allocated\n", used);
   assert(used < BSIZE*8);
@@ -269,7 +276,8 @@ balloc(int used)
     buf[i/8] = buf[i/8] | (0x1 << (i%8));
   }
   printf("balloc: write bitmap block at sector %d\n", sb.bmapstart);
-  wsect(sb.bmapstart, buf);
+  bmapstartPlusPartOffset = sb.bmapstart + partitionOffsets[sb.partitionNumber];//apply partition offset
+  wsect(bmapstartPlusPartOffset, buf);
 }
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -282,7 +290,7 @@ iappend(uint inum, void *xp, int n)
   struct dinode din;
   char buf[BSIZE];
   uint indirect[NINDIRECT];
-  uint x;
+  uint x, dinodeBlockAddrPlusPartOffset, xPlusPartOffset;
 
   rinode(inum, &din);
   off = xint(din.size);
@@ -299,17 +307,21 @@ iappend(uint inum, void *xp, int n)
       if(xint(din.addrs[NDIRECT]) == 0){
         din.addrs[NDIRECT] = xint(freeblock++);
       }
-      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+      dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
+      rsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
       if(indirect[fbn - NDIRECT] == 0){
         indirect[fbn - NDIRECT] = xint(freeblock++);
-        wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+	dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
+        wsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
       }
       x = xint(indirect[fbn-NDIRECT]);
     }
     n1 = min(n, (fbn + 1) * BSIZE - off);
-    rsect(x, buf);
+    xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
+    rsect(xPlusPartOffset, buf);
     bcopy(p, buf + off - (fbn * BSIZE), n1);
-    wsect(x, buf);
+    xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
+    wsect(xPlusPartOffset, buf);
     n -= n1;
     off += n1;
     p += n1;
