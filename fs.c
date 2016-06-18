@@ -87,7 +87,7 @@ static void
 bzero(int dev, int bno, int partitionNumber)
 {
   struct buf *bp;
-  APPLY_P_OFFSET(bno);//shift the bno according to the root directory partition
+  APPLY_P_OFFSET(bno, partitionNumber);//shift the bno according to the root directory partition
   bp = bread(dev, bno);
   memset(bp->data, 0, BSIZE);
   log_write(bp);
@@ -105,7 +105,7 @@ balloc(uint dev, int partitionNumber)
   struct buf *bp;
 
   bp = 0;
-  readsb(dev, &sb, partitionNum);
+  readsb(dev, &sb, partitionNumber);
   for(b = 0; b < sb.size; b += BPB){//BPB=512 bytes=512*8 bits = it means each block in block map represent 512*8(BPB) blocks of data 
     bno = BBLOCK(b, sb);
     APPLY_P_OFFSET(bno, partitionNumber);
@@ -248,7 +248,7 @@ ialloc(uint dev, short type, int partitionNumber)
   struct dinode *dip;
   uint bno;
 
-  readsb(dev, &sb, partitionNum);
+  readsb(dev, &sb, partitionNumber);
   for(inum = 1; inum < sb.ninodes; inum++){
     bno = IBLOCK(inum, sb);
     APPLY_P_OFFSET(bno, partitionNumber);
@@ -274,7 +274,7 @@ iupdate(struct inode *ip)
   struct dinode *dip;
   uint bno;
 
-  readsb(dev, &sb, ip->partitionNum);
+  readsb(ROOTDEV, &sb, ip->partitionNum);
   bno = IBLOCK(ip->inum, sb);
   APPLY_P_OFFSET(bno, ip->partitionNum);
   bp = bread(ip->dev, bno);
@@ -318,7 +318,7 @@ iget(uint dev, uint inum, int partitionNumber)
   ip = empty;
   ip->dev = dev;
   ip->inum = inum;
-  ip->partitionNumber;
+  ip->partitionNum = partitionNumber;
   ip->ref = 1;
   ip->flags = 0;
   release(&icache.lock);
@@ -346,7 +346,7 @@ ilock(struct inode *ip)
   struct dinode *dip;
   uint bno;
   
-  readsb(dev, &sb, ip->partitionNum);
+  readsb(ROOTDEV, &sb, ip->partitionNum);
 
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
@@ -454,6 +454,7 @@ bmap(struct inode *ip, uint bn)
     {
       ip->addrs[NDIRECT] = addr = balloc(ip->dev, ip->partitionNum);
     }
+    bno = addr;
     APPLY_P_OFFSET(bno, ip->partitionNum);
     bp = bread(ip->dev, bno);
     a = (uint*)bp->data;
@@ -478,6 +479,7 @@ itrunc(struct inode *ip)
 {
   int i, j;
   struct buf *bp;
+  uint bno;
   uint *a;
 
   for(i = 0; i < NDIRECT; i++){
@@ -488,7 +490,9 @@ itrunc(struct inode *ip)
   }
   
   if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
+    bno = ip->addrs[NDIRECT];
+    APPLY_P_OFFSET(bno, ip->partitionNum);
+    bp = bread(ip->dev, bno);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
@@ -521,6 +525,7 @@ readi(struct inode *ip, char *dst, uint off, uint n)
 {
   uint tot, m;
   struct buf *bp;
+  uint bno;
 
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].read)
@@ -534,7 +539,9 @@ readi(struct inode *ip, char *dst, uint off, uint n)
     n = ip->size - off;
 
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE));
+    bno = bmap(ip, off/BSIZE);
+    APPLY_P_OFFSET(bno, ip->partitionNum);
+    bp = bread(ip->dev, bno);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(dst, bp->data + off%BSIZE, m);
     brelse(bp);
@@ -549,6 +556,7 @@ writei(struct inode *ip, char *src, uint off, uint n)
 {
   uint tot, m;
   struct buf *bp;
+  uint bno;
 
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
@@ -562,7 +570,9 @@ writei(struct inode *ip, char *src, uint off, uint n)
     return -1;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE));
+    bno = bmap(ip, off/BSIZE);
+    APPLY_P_OFFSET(bno, ip->partitionNum);
+    bp = bread(ip->dev, bno);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(bp->data + off%BSIZE, src, m);
     log_write(bp);
@@ -606,7 +616,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
       if(poff)
         *poff = off;
       inum = de.inum;
-      return iget(dp->dev, inum);
+      return iget(dp->dev, inum, dp->partitionNum);//TODO what if the searched inode exists in a different partition(task6)
     }
   }
 
