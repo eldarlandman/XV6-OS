@@ -290,7 +290,8 @@ iappend(uint inum, void *xp, int n)
   struct dinode din;
   char buf[BSIZE];
   uint indirect[NINDIRECT];
-  uint x, dinodeBlockAddrPlusPartOffset, xPlusPartOffset;
+  uint x; //, dinodeBlockAddrPlusPartOffset, xPlusPartOffset;TODO remove when submitting 
+								//this was the shifted x block num that was removed, see next todo
 
   rinode(inum, &din);
   off = xint(din.size);
@@ -307,21 +308,31 @@ iappend(uint inum, void *xp, int n)
       if(xint(din.addrs[NDIRECT]) == 0){
         din.addrs[NDIRECT] = xint(freeblock++);
       }
-      dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
-      rsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
+      //dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
+      //rsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
+      //TODO make sure this is the right choice! in my opinion the inode holds the absolute block num 
+    //and for this reason x should not be shifted based on partition start
+      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       if(indirect[fbn - NDIRECT] == 0){
         indirect[fbn - NDIRECT] = xint(freeblock++);
-	dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
-        wsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
+	//dinodeBlockAddrPlusPartOffset = din.addrs[NDIRECT] + partitionOffsets[sb.partitionNumber];
+        //wsect(xint(dinodeBlockAddrPlusPartOffset), (char*)indirect);
+      //TODO make sure this is the right choice! in my opinion the inode holds the absolute block num 
+    //and for this reason x should not be shifted based on partition start	
+	wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       }
       x = xint(indirect[fbn-NDIRECT]);
     }
     n1 = min(n, (fbn + 1) * BSIZE - off);
-    xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
-    rsect(xPlusPartOffset, buf);
+    //xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
+    //rsect(xPlusPartOffset, buf);
+    //TODO make sure this is the right choice! in my opinion the inode holds the absolute block num 
+    //and for this reason x should not be shifted based on partition start
+    rsect(x, buf);
     bcopy(p, buf + off - (fbn * BSIZE), n1);
-    xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
-    wsect(xPlusPartOffset, buf);
+    //xPlusPartOffset = x + partitionOffsets[sb.partitionNumber];
+    //wsect(xPlusPartOffset, buf);
+    wsect(x, buf);
     n -= n1;
     off += n1;
     p += n1;
