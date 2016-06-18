@@ -246,7 +246,7 @@ create(char *path, short type, short major, short minor)
     return 0;
   ilock(dp);
 
-  if((ip = dirlookup(dp, name, &off)) != 0){
+  if((ip = dirlookup(dp, name, &off)) != 0){//TODO should we send a partitionNum here?
     iunlockput(dp);
     ilock(ip);
     if(type == T_FILE && ip->type == T_FILE)
@@ -255,7 +255,7 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-  if((ip = ialloc(dp->dev, type)) == 0)
+  if((ip = ialloc(dp->dev, type, dp->partitionNum)) == 0)
     panic("create: ialloc");
 
   ilock(ip);

@@ -97,7 +97,7 @@ bzero(int dev, int bno, int partitionNumber)
 // Blocks. 
 
 // Allocate a zeroed disk block.
-static uint
+static uint//returns a relative block number
 balloc(uint dev, int partitionNumber)
 {
   int b, bi, m;
@@ -105,6 +105,7 @@ balloc(uint dev, int partitionNumber)
   struct buf *bp;
 
   bp = 0;
+  readsb(dev, &sb, partitionNum);
   for(b = 0; b < sb.size; b += BPB){//BPB=512 bytes=512*8 bits = it means each block in block map represent 512*8(BPB) blocks of data 
     bno = BBLOCK(b, sb);
     APPLY_P_OFFSET(bno, partitionNumber);
@@ -233,27 +234,31 @@ iinit(int dev)
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
 }
 
-static struct inode* iget(uint dev, uint inum);
+static struct inode* iget(uint dev, uint inum, int partitionNumber);
 
 //PAGEBREAK!
 // Allocate a new inode with the given type on device dev.
 // A free inode has a type of zero.
 struct inode*
-ialloc(uint dev, short type)
+ialloc(uint dev, short type, int partitionNumber)
 {
   int inum;
   struct buf *bp;
   struct dinode *dip;
+  uint bno;
 
+  readsb(dev, &sb, partitionNum);
   for(inum = 1; inum < sb.ninodes; inum++){
-    bp = bread(dev, IBLOCK(inum, sb));
+    bno = IBLOCK(inum, sb);
+    APPLY_P_OFFSET(bno, partitionNumber);
+    bp = bread(dev, bno);
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
       log_write(bp);   // mark it allocated on the disk
       brelse(bp);
-      return iget(dev, inum);
+      return iget(dev, inum, partitionNumber);
     }
     brelse(bp);
   }
@@ -266,8 +271,12 @@ iupdate(struct inode *ip)
 {
   struct buf *bp;
   struct dinode *dip;
+  uint bno;
 
-  bp = bread(ip->dev, IBLOCK(ip->inum, sb));
+  readsb(dev, &sb, ip->partitionNum);
+  bno = IBLOCK(ip->inum, sb);
+  APPLY_P_OFFSET(bno, ip->partitionNum);
+  bp = bread(ip->dev, bno);
   dip = (struct dinode*)bp->data + ip->inum%IPB;
   dip->type = ip->type;
   dip->major = ip->major;
@@ -283,7 +292,7 @@ iupdate(struct inode *ip)
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
 static struct inode*
-iget(uint dev, uint inum)
+iget(uint dev, uint inum, int partitionNumber)
 {
   struct inode *ip, *empty;
 
@@ -292,7 +301,7 @@ iget(uint dev, uint inum)
   // Is the inode already cached?
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
-    if(ip->ref > 0 && ip->dev == dev && ip->inum == inum){
+    if(ip->ref > 0 && ip->dev == dev && ip->inum == inum && ip->partitionNum == partitionNumber){
       ip->ref++;
       release(&icache.lock);
       return ip;
@@ -308,6 +317,7 @@ iget(uint dev, uint inum)
   ip = empty;
   ip->dev = dev;
   ip->inum = inum;
+  ip->partitionNumber;
   ip->ref = 1;
   ip->flags = 0;
   release(&icache.lock);
@@ -333,6 +343,9 @@ ilock(struct inode *ip)
 {
   struct buf *bp;
   struct dinode *dip;
+  uint bno;
+  
+  readsb(dev, &sb, ip->partitionNum);
 
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
@@ -344,7 +357,9 @@ ilock(struct inode *ip)
   release(&icache.lock);
 
   if(!(ip->flags & I_VALID)){
-    bp = bread(ip->dev, IBLOCK(ip->inum, sb));
+    bno = IBLOCK(ip->inum, sb);
+    APPLY_P_OFFSET(bno, ip->partitionNum);
+    bp = bread(ip->dev, bno);
     dip = (struct dinode*)bp->data + ip->inum%IPB;
     ip->type = dip->type;
     ip->major = dip->major;
@@ -418,15 +433,16 @@ iunlockput(struct inode *ip)
 
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
-static uint
+static uint//returns a relative block number
 bmap(struct inode *ip, uint bn)
 {
   uint addr, *a;
   struct buf *bp;
+  uint bno;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0)
-      ip->addrs[bn] = addr = balloc(ip->dev);
+      ip->addrs[bn] = addr = balloc(ip->dev, ip->partitionNum);
     return addr;
   }
   bn -= NDIRECT;
@@ -434,11 +450,14 @@ bmap(struct inode *ip, uint bn)
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
-      ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);
+    {
+      ip->addrs[NDIRECT] = addr = balloc(ip->dev, ip->partitionNum);
+    }
+    APPLY_P_OFFSET(bno, ip->partitionNum);
+    bp = bread(ip->dev, bno);
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
-      a[bn] = addr = balloc(ip->dev);
+      a[bn] = addr = balloc(ip->dev, ip->partitionNum);
       log_write(bp);
     }
     brelse(bp);
@@ -673,7 +692,7 @@ namex(char *path, int nameiparent, char *name)
   struct inode *ip, *next;
 
   if(*path == '/')
-    ip = iget(ROOTDEV, ROOTINO);
+    ip = iget(ROOTDEV, ROOTINO);//TODO partition number is the root partition
   else
     ip = idup(proc->cwd);
 
