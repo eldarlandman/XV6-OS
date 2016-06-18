@@ -84,7 +84,7 @@ readsb(int dev, struct superblock *sb, int partitionNum)
 
 // Zero a block.
 static void
-bzero(int dev, int bno)
+bzero(int dev, int bno, int partitionNumber)
 {
   struct buf *bp;
   APPLY_P_OFFSET(bno);//shift the bno according to the root directory partition
@@ -98,26 +98,25 @@ bzero(int dev, int bno)
 
 // Allocate a zeroed disk block.
 static uint
-balloc(uint dev)
+balloc(uint dev, int partitionNumber)
 {
   int b, bi, m;
   uint bno;
   struct buf *bp;
 
   bp = 0;
-  for(b = 0; b < sb.size; b += BPB){
+  for(b = 0; b < sb.size; b += BPB){//BPB=512 bytes=512*8 bits = it means each block in block map represent 512*8(BPB) blocks of data 
     bno = BBLOCK(b, sb);
-    APPLY_P_OFFSET(bno);
+    APPLY_P_OFFSET(bno, partitionNumber);
     bp = bread(dev, bno);
-    for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
+    for(bi = 0 ; bi < BPB && b + bi < sb.size; bi++){ //iterate on BPB block. bi represents a data block 
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
         brelse(bp);
 	bno = b + bi;
-	APPLY_P_OFFSET(bno);
-        bzero(dev, bno);
+        bzero(dev, bno, partitionNumber);
         return b + bi;
       }
     }
@@ -135,8 +134,10 @@ bfree(int dev, uint b, int partitionNum)
   int bi, m;
 
   readsb(dev, &sb, partitionNum);
-  bno = BBLOCK(b, sb);
-  APPLY_P_OFFSET(bno);
+  
+  bno = BBLOCK(b, sb); //b is realtive, sb is absoloute
+  APPLY_P_OFFSET(bno, partitionNum);
+  
   bp = bread(dev, bno);
   bi = b % BPB;
   m = 1 << (bi % 8);
@@ -221,10 +222,9 @@ iinit(int dev)
   initlock(&icache.lock, "icache");
   struct mbr * loadedMbr = readmbr();
   for (partitionIndex = 0; partitionIndex < 4; partitionIndex++)
-  {
+  {//TODO maybe we should check what partition is bootable
     if (loadedMbr->partitions[partitionIndex].flags &  PART_BOOTABLE)
     {
-      
       break;
     }
   }

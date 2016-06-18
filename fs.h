@@ -48,8 +48,8 @@ struct dinode {//TODO consider adding partition number
 // Block of free map containing bit for block b
 #define BBLOCK(b, sb) (b/BPB + sb.bmapstart)
 
-//apply the offset of a partition on a block number, based on mbr + sb
-#define APPLY_P_OFFSET(bno) (bno = bno + loadedMbr.partitions[sb.partitionNumber].offset)
+//apply the offset of a partition on a block number, based on mbr and an argumented partition number
+#define APPLY_P_OFFSET(bno, pnum) (bno = bno + loadedMbr.partitions[pnum].offset)
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
