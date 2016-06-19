@@ -72,7 +72,7 @@ xint(uint x)
 int
 main(int argc, char *argv[])
 {
-  int i, cc, fd;
+  int i, cc, fd, bootblockFD;
   uint rootino, inum, off;
   struct dirent de;
   char buf[BSIZE];
@@ -85,7 +85,7 @@ main(int argc, char *argv[])
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
-  if(argc < 2){
+  if(argc < 4){
     fprintf(stderr, "Usage: mkfs fs.img files...\n");
     exit(1);
   }
@@ -99,6 +99,13 @@ main(int argc, char *argv[])
     exit(1);
   }
 
+    if (strcmp(argv[2], "bootblock") != 0)
+  {
+    fprintf(stderr, "Usage: mkfs fs.img bootblock kernel files...\n");
+    exit(1);
+  }
+
+  
   // 1 fs block = 1 disk sector
   nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
   nblocks = PART_SIZE - nmeta;
@@ -120,10 +127,24 @@ main(int argc, char *argv[])
   for(i = -1; i < FSSIZE - 1; i++)
     wsect(i, zeroes);
   
+    bootblockFD = open(argv[2], O_RDWR);
+  if (bootblockFD < 0)
+  {
+    perror(argv[2]);
+    exit(1);
+  }
+
   
   memset(buf, 0, sizeof(buf));					//gal: nullify buf: a buffer the size of a block allocated on the stack
   struct mbr newMbr;						//allocate mbr struct on the stack
   memset(newMbr.bootstrap, 0, BOOTSTRAP);	//nullify the bootstrap TODO consider removal, for some reason when this was allocated it was filled with junk
+    if (read(bootblockFD, &newMbr, BOOTSTRAP) < BOOTSTRAP)
+  {
+    perror(argv[2]);
+    exit(1);
+  }
+
+  close(bootblockFD);
   
   for (i = 0; i < 4; i++)
   {
@@ -133,6 +154,8 @@ main(int argc, char *argv[])
       newMbr.partitions[i].flags = 0;
   }
   newMbr.partitions[0].flags = PART_ALLOCATED | PART_BOOTABLE; //set partition 0 to be bootable and allocated. 
+  newMbr.magic[0] = 0x55;
+  newMbr.magic[1] = 0xAA;
   
   memmove(buf, &newMbr, sizeof(newMbr));		//copy the super block into the allocated buffer
   wsect(-1, buf);								//write the buffer(mbr) into the first block
@@ -154,7 +177,7 @@ main(int argc, char *argv[])
   strcpy(de.name, "..");
   iappend(rootino, &de, sizeof(de));
 
-  for(i = 2; i < argc; i++){
+  for(i = 4; i < argc; i++){
     assert(index(argv[i], '/') == 0);
 
     if((fd = open(argv[i], 0)) < 0){

@@ -173,8 +173,8 @@ UPROGS=\
 	_wc\
 	_zombie\
 
-fs.img: mkfs README $(UPROGS)
-	./mkfs fs.img README $(UPROGS)
+fs.img: bootblock kernel mkfs README $(UPROGS)
+	./mkfs fs.img bootblock kernel README $(UPROGS)
 
 -include *.d
 
