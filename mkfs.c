@@ -23,7 +23,7 @@
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
-int nbitmap = FSSIZE/(BSIZE*8) + 1;
+int nbitmap = PART_SIZE/(BSIZE*8) + 1;
 int ninodeblocks = NINODES / IPB + 1;
 int nlog = LOGSIZE;  
 int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
@@ -113,7 +113,7 @@ main(int argc, char *argv[])
   sb.partitionNumber = 0;	//the root partition is partition 0
   
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
-         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
+         nmeta, nlog, ninodeblocks, nbitmap, nblocks, PART_SIZE);
 
   freeblock = nmeta;     // the first free block that we can allocate
 

@@ -10,6 +10,7 @@
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
 #define LOGSIZE      (MAXOPBLOCKS*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
-#define FSSIZE       1000  // size of file system in blocks TODO modify this value when upgrading into 4 partitions(task 5)
+#define FSSIZE       4001  // size of file system in blocks TODO modify this value when upgrading into 4 partitions(task 5)
+					//1 for mbr and 4 * PART_SIZE
 #define PART_SIZE	1000 // the size of a partition
 
