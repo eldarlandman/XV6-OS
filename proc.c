@@ -97,7 +97,8 @@ userinit(void)
   p->tf->eip = 0;  // beginning of initcode.S
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
-  p->cwd = namei("/");
+  //p->cwd = namei("/");//TODO this one is called before iinit, make sure we make it work correctly
+					  //works! remove before submission
 
   p->state = RUNNABLE;
 }
@@ -341,6 +342,8 @@ forkret(void)
     first = 0;
     iinit(ROOTDEV);
     initlog(ROOTDEV);
+    proc->cwd = namei("/");//TODO is this the right solution for the fact that iinit comes after userinit?
+					  //works! remove before submission
   }
   
   // Return to "caller", actually trapret (see allocproc).

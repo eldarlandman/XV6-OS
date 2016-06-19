@@ -142,7 +142,7 @@ main(int argc, char *argv[])
   wsect(0, buf);					//write the buffer(super block) into the first block
 
   rootino = ialloc(T_DIR);
-  assert(rootino == ROOTINO);//TODO might not pass with more than one partition
+  assert(rootino == ROOTINO);//shold pass for every partition, the inode num is relative to the partition
 
   bzero(&de, sizeof(de));
   de.inum = xshort(rootino);

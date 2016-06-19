@@ -58,8 +58,10 @@ initlog(int dev)
 
   struct superblock sb;
   initlock(&log.lock, "log");
+  log.partitionNum = getRootPartitionNum();
   readsb(dev, &sb,log.partitionNum);
-  log.start = sb.logstart;
+  log.start = 2;//TODO the value that is given to sb.logstart in mkfs
+		      //we were not requested to support relative log but still reconsider this given value
   log.size = sb.nlog;
   log.dev = dev;
   recover_from_log();

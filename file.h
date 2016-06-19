@@ -22,7 +22,7 @@ struct inode {
   short nlink;
   uint size;
   uint addrs[NDIRECT+1];
-  int partitionNum; //TODO initlize required
+  int partitionNum; 
   //TODO consider adding sb pointer
   
 };

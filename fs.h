@@ -10,7 +10,7 @@
 //
 // mkfs computes the super block and builds an initial file system. The super describes
 // the disk layout:
-struct superblock {//TODO should we add partiotion number?
+struct superblock {
   uint size;         // Size of file system image (blocks)
   uint nblocks;      // Number of data blocks
   uint ninodes;      // Number of inodes.
@@ -20,6 +20,7 @@ struct superblock {//TODO should we add partiotion number?
   uint bmapstart;    // Block number of first free map block
   
   uint partitionNumber;//the partition number of the partition this uper block maps
+				    //used only in mkfs
 };
 
 #define NDIRECT 12
@@ -27,7 +28,7 @@ struct superblock {//TODO should we add partiotion number?
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 // On-disk inode structure
-struct dinode {//TODO consider adding partition number
+struct dinode {
   short type;           // File type
   short major;          // Major device number (T_DEV only)
   short minor;          // Minor device number (T_DEV only)

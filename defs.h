@@ -34,6 +34,7 @@ int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
 
 // fs.c
+int 		getRootPartitionNum(void);
 void            readsb(int dev, struct superblock *sb, int partitionNum);
 int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);

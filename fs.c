@@ -26,7 +26,8 @@
 static void itrunc(struct inode*);
 struct superblock sb;   	// there should be one per dev, but we run with one dev
 struct mbr  loadedMbr;		//points the mbr
-int partitionBootNum;
+int partitionBootNum = -1;
+
 
 struct mbr *//loads the MBR from ROOTDEV
 loadMbrFromDisk(void)
@@ -68,14 +69,31 @@ readmbr(void)
   return mbrPtr;
 }
 
+int
+getRootPartitionNum(void)
+{
+  int partitionIndex;
+  if (partitionBootNum == -1)
+  {
+    struct mbr * loadedMbr = loadMbrFromDisk();
+    for (partitionIndex = 0; partitionIndex < 4; partitionIndex++)
+    {//TODO maybe we should check what partition is bootable
+      if (loadedMbr->partitions[partitionIndex].flags &  PART_BOOTABLE)
+      {
+	partitionBootNum=partitionIndex;
+	break;
+      }
+    }
+  }
+  return partitionBootNum;
+}
+
 // Read the super block.
 void
 readsb(int dev, struct superblock *sb, int partitionNum)
 {
   struct buf *bp;
-  //struct mbr * mbrPtr = loadMbrFromDisk();
-  //int superBlockLocation = mbrPtr->partitions[partitionNum].offset;	//task3: we will not read block 1 but the first block of the requested partition
-  int superBlockLocation = loadedMbr.partitions[partitionNum].offset;//TODO if works stay that way (static global mbr the we read only once)
+  int superBlockLocation = loadedMbr.partitions[partitionNum].offset;
   bp = bread(dev, superBlockLocation);
   memmove(sb, bp->data, sizeof(*sb));
   sb->partitionNumber = partitionNum;
@@ -712,6 +730,7 @@ namex(char *path, int nameiparent, char *name)
     ilock(ip);
     if(ip->type != T_DIR){
       iunlockput(ip); //TODO theres no reference to relative/absoloute in iunlockput
+			      //is this eldar's todo? thats the meaning
       return 0;
     }
     if(nameiparent && *path == '\0'){
