@@ -269,6 +269,7 @@ nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block fo
   off = ((off/BSIZE) + 1) * BSIZE;
   din.size = xint(off);
   winode(rootino, &din);
+  
 /* -------------------finish copying user files-------------------*/
   
   balloc(freeblock);
