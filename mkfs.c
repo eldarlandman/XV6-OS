@@ -114,29 +114,7 @@ main(int argc, char *argv[])
     exit(1);
   }
   
-
-  /*-------------------the next code lines initlize super block metadata ONLY FOR THE FIRST PARTITION-------------------*/
   
-  // 1 fs block = 1 disk sector
-  nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
-  nblocks = PART_SIZE - nmeta;
-  
-  sb.size = xint(PART_SIZE);
-  sb.nblocks = xint(nblocks);
-  sb.ninodes = xint(NINODES);
-  sb.nlog = xint(nlog);
-  sb.logstart = xint(1);	//gal: log starts from the partition offest + 1 block for super block
-  sb.inodestart = xint(1 + nlog);
-  sb.bmapstart = xint(1 + nlog + ninodeblocks);
-  sb.partitionNumber = 0;	//the root partition is partition 0
-  
-  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
-	 nmeta, nlog, ninodeblocks, nbitmap, nblocks, PART_SIZE);
-  
-  freeblock = nmeta;     // the first free block that we can allocate
-
-/*-------------------finish  initlize super block metadata ONLY FOR THE FIRST PARTITION--------------------------------------*/  
-
   
   
 /*-------------------copying to fs.img the mbr- table_partitions(type, offset, size, flags) , bootloader, magic nums   - to block 0-------------------*/ 
@@ -211,7 +189,33 @@ for(i = 0; i < FSSIZE ; i++) //nullify all fs.img blocks
 /* -------------------finish copying kernel code-------------------*/
   
 
+
 /*-------------------the next code is copying the user  files into fs.img on the first partition-------------------*/
+
+//the next code lines initlize super block metadata ONLY FOR THE FIRST PARTITION
+// 1 fs block = 1 disk sector
+
+nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
+  nblocks = PART_SIZE - nmeta;
+  
+  sb.size = xint(PART_SIZE);
+  sb.nblocks = xint(nblocks);
+  sb.ninodes = xint(NINODES);
+  sb.nlog = xint(nlog);
+  sb.logstart = xint(1);	//gal: log starts from the partition offest + 1 block for super block
+  sb.inodestart = xint(1 + nlog);
+  sb.bmapstart = xint(1 + nlog + ninodeblocks);
+  sb.partitionNumber = 0;	//the root partition is partition 0
+  
+  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
+	 nmeta, nlog, ninodeblocks, nbitmap, nblocks, PART_SIZE);
+  
+  freeblock = nmeta;     // the first free block that we can allocate
+
+//finish  initlize super block metadata ONLY FOR THE FIRST PARTITION 
+
+
+
   memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
   memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
   wsect(0, buf);					//write the buffer(super block) into the first block
