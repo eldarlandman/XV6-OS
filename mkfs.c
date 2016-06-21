@@ -90,6 +90,7 @@ main(int argc, char *argv[])
   for (i = 0; i < 4; i++)//set the partitions offsets for future use
   {
     partitionOffsets[i] = 1+kernelCodeBlockskSize + (PART_SIZE * i);  //TODO consider remove 1+
+    //printf("\npartition %d offset starts at block\n");
   }
   
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
@@ -192,10 +193,13 @@ for(i = 0; i < FSSIZE ; i++) //nullify all fs.img blocks
 
 /*-------------------the next code is copying the user  files into fs.img on the first partition-------------------*/
 
-//the next code lines initlize super block metadata ONLY FOR THE FIRST PARTITION
+//the next code lines initlize super block metadata FOR ALL PARTITIONES
 // 1 fs block = 1 disk sector
-
-nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
+int partitionNumber;
+for (partitionNumber=0; partitionNumber<4; partitionNumber++){
+  
+  freeinode=1;
+  nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block for super block
   nblocks = PART_SIZE - nmeta;
   
   sb.size = xint(PART_SIZE);
@@ -205,17 +209,13 @@ nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block fo
   sb.logstart = xint(1);	//gal: log starts from the partition offest + 1 block for super block
   sb.inodestart = xint(1 + nlog);
   sb.bmapstart = xint(1 + nlog + ninodeblocks);
-  sb.partitionNumber = 0;	//the root partition is partition 0
+  sb.partitionNumber = partitionNumber;	//the root partition is partition 0
   
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
 	 nmeta, nlog, ninodeblocks, nbitmap, nblocks, PART_SIZE);
   
   freeblock = nmeta;     // the first free block that we can allocate
-
-//finish  initlize super block metadata ONLY FOR THE FIRST PARTITION 
-
-
-
+  
   memset(buf, 0, sizeof(buf));		//gal: nullify buf: a buffer the size of a block allocated on the stack
   memmove(buf, &sb, sizeof(sb));	//copy the super block into the allocated buffer
   wsect(0, buf);					//write the buffer(super block) into the first block
@@ -238,6 +238,11 @@ nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block fo
     
     assert(index(argv[i], '/') == 0);
     
+    if( (strcmp(argv[i],"README")!=0) && argv[i][0] != '_'){    
+      printf("write to partition %d - %s \n",partitionNumber, argv[i]);
+      --argv[i];
+    }
+    
     if((fd = open(argv[i], 0)) < 0){
       perror(argv[i]);
       exit(1);
@@ -249,6 +254,7 @@ nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block fo
     // in place of system binaries like rm and cat.
     if(argv[i][0] == '_')
       ++argv[i];
+            
     
     inum = ialloc(T_FILE);
     
@@ -273,6 +279,10 @@ nmeta = 1 + nlog + ninodeblocks + nbitmap;		//gal: partition offset + 1 block fo
 /* -------------------finish copying user files-------------------*/
   
   balloc(freeblock);
+      
+}
+
+//finish  initlize super block metadata ONLY FOR ALL PARTITIONES 
   
   exit(0);
 }
