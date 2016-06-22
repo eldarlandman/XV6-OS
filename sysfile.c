@@ -385,7 +385,6 @@ sys_chdir(void)
     return -1;
   }
   iunlock(ip);
-  checkIPforMount(&ip);
   iput(proc->cwd);
   end_op();
   proc->cwd = ip;

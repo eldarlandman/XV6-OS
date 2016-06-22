@@ -635,18 +635,18 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 {
   uint off, inum;
   struct dirent de;
-
-  //check if the searched directory is mapped to other partition
+    
+  if(dp->type != T_DIR)
+    panic("dirlookup not DIR");
+  
+    //check if the searched directory is mapped to other partition
   if (mountMapping[dp->partitionNum][dp->inum] != dp->partitionNum)
   {
     dp = iget(dp->dev, ROOTINO, mountMapping[dp->partitionNum][dp->inum]);
     ilock(dp);
     iunlock(dp);
   }
-    
-  if(dp->type != T_DIR)
-    panic("dirlookup not DIR");
-  
+
 
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
@@ -772,6 +772,13 @@ namex(char *path, int nameiparent, char *name)
   if(nameiparent){
     iput(ip);
     return 0;
+  }
+    //check if the searched directory is mapped to other partition
+  if (mountMapping[ip->partitionNum][ip->inum] != ip->partitionNum)
+  {
+    ip = iget(ip->dev, ROOTINO, mountMapping[ip->partitionNum][ip->inum]);
+    ilock(ip);
+    iunlock(ip);
   }
   cprintf("namex returned inum %d in partition %d type %d\n", ip->inum, ip->partitionNum, ip->type);
   return ip;
