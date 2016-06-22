@@ -89,3 +89,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_mount(void)
+{
+  char* path;
+  int partitionNumber;
+  if (argstr(0, &path) < 0 || argint(1, &partitionNumber) < 0)
+  {
+    return -1;
+  }
+  return applyMount(path, partitionNumber);
+}

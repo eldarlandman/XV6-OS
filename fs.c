@@ -28,6 +28,12 @@ struct superblock sb;   	// there should be one per dev, but we run with one dev
 struct mbr  loadedMbr;		//points the mbr
 int partitionBootNum = -1;
 
+//a data structure for mapping the mounting points
+//each inode in each partition will have a key in this DS
+//the corresponding value for an inode is the partition number
+//default value is the root partition(first bootable partition)
+int mountMapping[PART_COUNT][NINODES];
+
 
 struct mbr *//loads the MBR from ROOTDEV
 loadMbrFromDisk(void)
@@ -237,6 +243,7 @@ struct {
 void
 iinit(int dev)
 {
+  int i, j;
   int partitionIndex;
   initlock(&icache.lock, "icache");
   struct mbr * loadedMbr = readmbr();
@@ -249,6 +256,14 @@ iinit(int dev)
     }
   }
   readsb(dev, &sb, partitionIndex);
+  //the following code initiates the mount mapping default values to be the root partition (first bootable)
+  for (i = 0; i < PART_COUNT; i++)
+  {
+    for (j = 0; j < NINODES; j++)
+    {
+      mountMapping[i][j] = i;
+    }
+  }
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
 }
@@ -340,7 +355,7 @@ iget(uint dev, uint inum, int partitionNumber)
   ip->ref = 1;
   ip->flags = 0;
   release(&icache.lock);
-
+  
   return ip;
 }
 
@@ -621,8 +636,17 @@ dirlookup(struct inode *dp, char *name, uint *poff)
   uint off, inum;
   struct dirent de;
 
+  //check if the searched directory is mapped to other partition
+  if (mountMapping[dp->partitionNum][dp->inum] != dp->partitionNum)
+  {
+    dp = iget(dp->dev, ROOTINO, mountMapping[dp->partitionNum][dp->inum]);
+    ilock(dp);
+    iunlock(dp);
+  }
+    
   if(dp->type != T_DIR)
     panic("dirlookup not DIR");
+  
 
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
@@ -749,6 +773,7 @@ namex(char *path, int nameiparent, char *name)
     iput(ip);
     return 0;
   }
+  cprintf("namex returned inum %d in partition %d type %d\n", ip->inum, ip->partitionNum, ip->type);
   return ip;
 }
 
@@ -765,3 +790,17 @@ nameiparent(char *path, char *name)
   
   return namex(path, 1, name);
 }
+
+int
+applyMount(char * path, uint partitionNumber)
+{
+  struct inode * mountedNode = namei(path);
+  ilock(mountedNode);
+  cprintf("namei returned inum %d in partition %d type %d\n", mountedNode->inum, mountedNode->partitionNum, mountedNode->type);
+  if (!mountedNode || mountedNode->type != T_DIR)
+    return -1;
+  mountMapping[mountedNode->partitionNum][mountedNode->inum] = partitionNumber;
+  iunlock(mountedNode);
+  return 0;
+}
+

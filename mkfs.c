@@ -18,7 +18,6 @@
 #define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif
 
-#define NINODES 200
 #define KERSIZE 180570
 
 // Disk layout:
@@ -120,7 +119,7 @@ main(int argc, char *argv[])
   
 /*-------------------copying to fs.img the mbr- table_partitions(type, offset, size, flags) , bootloader, magic nums   - to block 0-------------------*/ 
 
-for(i = 0; i < FSSIZE ; i++) //nullify all fs.img blocks
+for(i = 0; i < FSSIZE + kernelCodeBlockskSize ; i++) //nullify all fs.img blocks
     wsectAbs(i, zeroes);
  
   bootblockFD = open(argv[2], O_RDWR);
@@ -148,6 +147,7 @@ for(i = 0; i < FSSIZE ; i++) //nullify all fs.img blocks
     newMbr.partitions[i].offset = partitionOffsets[i];				//partition 0 starts from block 1
     newMbr.partitions[i].size = PART_SIZE;			//partition 0 size is FSSIZE = 1000 block
     newMbr.partitions[i].flags = 0;
+    newMbr.partitions[i].flags = PART_ALLOCATED;
   }
   newMbr.partitions[0].flags = PART_ALLOCATED | PART_BOOTABLE; //set partition 0 to be bootable and allocated. 
   newMbr.magic[0] = 0x55;
@@ -344,12 +344,13 @@ rinode(uint inum, struct dinode *ip)
 void
 rsect(uint sec, void *buf)
 {
+  int n;
   sec = sec + partitionOffsets[sb.partitionNumber];
   if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
     perror("lseek");
     exit(1);
   }
-  if(read(fsfd, buf, BSIZE) != BSIZE){
+  if((n = read(fsfd, buf, BSIZE)) != BSIZE){
     close(fsfd);
     perror("read");
     exit(1);
