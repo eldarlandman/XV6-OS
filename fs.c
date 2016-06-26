@@ -805,12 +805,16 @@ int
 applyMount(char * path, uint partitionNumber)
 {
   struct inode * mountedNode = namei(path);
-  ilock(mountedNode);
-  cprintf("namei returned inum %d in partition %d type %d\n", mountedNode->inum, mountedNode->partitionNum, mountedNode->type);
-  if (!mountedNode || mountedNode->type != T_DIR)
-    return -1;
-  mountMapping[mountedNode->partitionNum][mountedNode->inum] = partitionNumber;
-  iunlock(mountedNode);
-  return 0;
+  if (mountedNode)
+  {
+    ilock(mountedNode);
+    //cprintf("namei returned inum %d in partition %d type %d\n", mountedNode->inum, mountedNode->partitionNum, mountedNode->type);
+    if (!mountedNode || mountedNode->type != T_DIR)
+      return -1;
+    mountMapping[mountedNode->partitionNum][mountedNode->inum] = partitionNumber;
+    iunlock(mountedNode);
+    return 0;
+  }
+  return -1;
 }
 
