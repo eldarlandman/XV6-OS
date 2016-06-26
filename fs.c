@@ -65,12 +65,15 @@ readmbr(void)
       type = "FAT";
     else
       type = "unknown type";
-    cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
-	    i, 
-	    bootable, 
-	    type, 
-	    (uint)mbrPtr->partitions[i].offset, 
-	    (uint)mbrPtr->partitions[i].size);
+    if (mbrPtr->partitions[i].flags & PART_ALLOCATED)
+    {
+      cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
+	      i, 
+	      bootable, 
+	      type, 
+	      (uint)mbrPtr->partitions[i].offset, 
+	      (uint)mbrPtr->partitions[i].size);
+    }
   }
   return mbrPtr;
 }
@@ -780,7 +783,7 @@ namex(char *path, int nameiparent, char *name)
     ilock(ip);
     iunlock(ip);
   }
-  cprintf("namex returned inum %d in partition %d type %d\n", ip->inum, ip->partitionNum, ip->type);
+  //cprintf("namex returned inum %d in partition %d type %d\n", ip->inum, ip->partitionNum, ip->type);
   return ip;
 }
 
